@@ -1,0 +1,51 @@
+---
+title: "Raul J Sola Navarro: Professional Portfolio"
+---
+
+## Welcome!
+
+::: {layout-ncol=2}
+![Raul J Sola Navarro]("C:\Users\solar\OneDrive\Documents\Personal Development\MS Business Analytics\(4) STA 9750 - Basic Software Tools for Data Analysis\STA9750-2026-SPRING\Raul_Sola Navarro.JPG"){width=250px fig-align="left"}
+
+I am a full-time graduate student in the **Master of Science in Business Analytics (MSBA)** program at the Zicklin School of Business, Baruch College. Beyond my studies, I serve as a **Student Ambassador**, helping prospective students navigate their journey into data science.
+
+My background is a blend of corporate strategy and human performance. Before joining Zicklin, I spent over a decade at **Texas Instruments** focusing on Finance & Operations. I am also a **Certified Personal Trainer** and Corrective Exercise Specialist (ISSA), driven by a passion for health and data-driven wellness.
+:::
+
+```{r}
+#| include: false
+1+1
+```
+--------------
+Last Updated: `r format(Sys.time(), "%A %m %d, %Y at %H:%M%p")`
+---
+
+### Professional Background
+* **Finance & Operations:** 10+ years of experience at Texas Instruments.
+* **Certifications:** ISSA-CPT, ISSA Corrective Exercise Specialist.
+* **Technical Skills:** R, Python, SQL (Oracle, PostgreSQL, BigQuery), and Data Visualization.
+
+### Let's Connect
+* [Download My Resume (PDF)]("C:\Users\solar\OneDrive\Documents\Personal Development\MS Business Analytics\Career & Job Search\Resume\Sola Navarro_Raul Resume.pdf")
+* [Find me on LinkedIn](https://www.linkedin.com/in/raul-sola-navarro/)
+* [GitHub Repository](https://github.com/RaulSolaNavarro)
+
+---
+
+### Where to Find Me
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+if(!require("leaflet")){
+    options(repos=c(CRAN="[https://cloud.r-project.org](https://cloud.r-project.org)"))
+    install.packages("leaflet")
+    stopifnot(require("leaflet"))
+}
+baruch_longitude <- -73.98333
+baruch_latitude  <- +40.74028
+leaflet() |>
+  addTiles() |>
+  setView(baruch_longitude, baruch_latitude, zoom=17) |>
+  addPopups(baruch_longitude, baruch_latitude, 
+            "I am a Master's student at <b>Baruch College</b>!")
