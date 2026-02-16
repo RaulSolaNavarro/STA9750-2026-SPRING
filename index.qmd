@@ -1,11 +1,13 @@
 ---
 title: "Raul J Sola Navarro: Professional Portfolio"
+resources:
+  - assets/
 ---
 
 ## Welcome!
 
 ::: {layout-ncol=2}
-![Raul J Sola Navarro]("C:\Users\solar\OneDrive\Documents\Personal Development\MS Business Analytics\(4) STA 9750 - Basic Software Tools for Data Analysis\STA9750-2026-SPRING\Raul_Sola Navarro.JPG"){width=250px fig-align="left"}
+![Raul J Sola Navarro](assets/headshot.jpg){width=250px fig-align="left"}
 
 I am a full-time graduate student in the **Master of Science in Business Analytics (MSBA)** program at the Zicklin School of Business, Baruch College. Beyond my studies, I serve as a **Student Ambassador**, helping prospective students navigate their journey into data science.
 
@@ -26,7 +28,7 @@ Last Updated: `r format(Sys.time(), "%A %m %d, %Y at %H:%M%p")`
 * **Technical Skills:** R, Python, SQL (Oracle, PostgreSQL, BigQuery), and Data Visualization.
 
 ### Let's Connect
-* [Download My Resume (PDF)]("C:\Users\solar\OneDrive\Documents\Personal Development\MS Business Analytics\Career & Job Search\Resume\Sola Navarro_Raul Resume.pdf")
+* [Download My Resume (PDF)](assets/resume.pdf)
 * [Find me on LinkedIn](https://www.linkedin.com/in/raul-sola-navarro/)
 * [GitHub Repository](https://github.com/RaulSolaNavarro)
 
