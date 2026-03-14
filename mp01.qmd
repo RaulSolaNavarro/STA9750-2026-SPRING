@@ -1,0 +1,680 @@
+---
+lang: en
+title: "Assessing the Impact of SFFA on Campus Diversity"
+subtitle: "STA 9750 Mini-Project #01"
+author: "Raúl J. Solá Navarro"
+date: last-modified
+theme: 
+  light: flatly  
+  dark: darkly    
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    number-sections: true
+    code-fold: true
+    code-summary: "View R Code"
+    embed-resources: true
+    smooth-scroll: true
+    link-external-newwindow: true
+    fig-cap-location: bottom
+    tbl-cap-location: top
+    df-print: paged
+    page-layout: article
+    fontsize: 1.25em
+    linestretch: 1.7
+---
+
+```{r}
+#| label: setup
+#| include: false
+#| cache: false
+
+library(tidyverse)
+library(glue)
+library(gt)
+library(scales)
+library(skimr)
+```
+
+```{css}
+/*| echo: false */
+body, .quarto-document-content {
+  font-size: 1.35rem !important;
+  line-height: 1.9;
+}
+
+h1 { font-size: 2.2rem !important; }
+h2 { font-size: 1.9rem !important; }
+h3 { font-size: 1.6rem !important; }
+
+.panel-tabset { font-size: 1.2rem !important; }
+
+/* Fix callout text size */
+.callout-body { font-size: 1.2rem !important; }
+
+/* Fix TOC text size */
+#TOC { font-size: 1.1rem !important; }
+
+/* Fix code block text size */
+pre, code { font-size: 1.0rem !important; }
+```
+
+## Introduction
+
+In June 2023, the Supreme Court's decision in *Students for Fair Admissions (SFFA) v. Harvard* ended race-aware admissions programs in the United States higher education institutions. This report analyzes the ruling's effect on demographic shifts using data from the *Integrated Post-secondary Education Data System (IPEDS)*. Through data summarization and exploratory analysis, I compare the diversity composition of institutions like Baruch College and the CUNY system to "control" systems like the California Public University system. The goal is to determine whether observed changes in diversity metrics post-SFFA reflect normal demographic variation or a structural shift in the admissions landscape.
+
+## Data Acquisition and Preparation
+
+::: {.callout-note}
+Data is sourced directly from the National Center for Education Statistics (NCES) IPEDS data center, covering institutional descriptions and enrollment records from 2010 to 2024.
+:::
+
+```{r}
+#| label: data-acquisition
+#| message: false
+#| warning: false
+#| cache: true
+#| cache.extra: !expr file.exists("data/mp01/hd2024.csv.zip")
+
+#' Acquire IPEDS Data for MP#01
+#' This function will acquire and standardize all data for MP#01
+#' from IPEDS (https://nces.ed.gov/ipeds/datacenter/DataFiles.aspx)
+#' 
+#' We're starting in 2010 as the data seems to be reasonably complete 
+#' after that point. 
+acquire_ipeds_data <- function(start_year=2010, end_year=2024){
+  
+    data_dir <- file.path("data", "mp01")
+    
+    if(!dir.exists(data_dir)){
+        dir.create(data_dir, showWarnings=FALSE, recursive=TRUE)
+    }
+    
+    YEARS <- seq(start_year, end_year)
+    
+    EFA_ALL <- map(YEARS, function(yy){
+        if(yy <= 2022){
+            ef_url <- glue("https://nces.ed.gov/ipeds/datacenter/data/EF{yy}A.zip")
+            
+        } else {
+            ef_url <- glue("https://nces.ed.gov/ipeds/data-generator?year={yy}&tableName=EF{yy}A&HasRV=0&type=csv")
+        }
+        
+        ef_file <- file.path(data_dir, glue("ef{yy}a.csv.zip"))
+        
+        if(!file.exists(ef_file)){
+            message(glue("Downloading Enrollment Data for {yy} from {ef_url}"))
+            download.file(ef_url, destfile = ef_file, quiet=TRUE, mode="wb")    
+        }
+        
+        read_csv(ef_file, 
+                 show_col_types=FALSE) |>
+            mutate(year = yy, 
+                   # American Indian or Alaskan Native
+                   enrollment_m_aian = EFAIANM, 
+                   enrollment_f_aian = EFAIANW, 
+                   # Asian
+                   enrollment_m_asia = EFASIAM, 
+                   enrollment_f_asia = EFASIAW, 
+                   # Black or African-American, 
+                   enrollment_m_bkaa = EFBKAAM, 
+                   enrollment_f_bkaa = EFBKAAW, 
+                   # Hispanic 
+                   enrollment_m_hisp = EFHISPM, 
+                   enrollment_f_hisp = EFHISPW, 
+                   # Native Hawaiian or Other Pacific Islander 
+                   enrollment_m_nhpi = EFNHPIM, 
+                   enrollment_f_nhpi = EFNHPIW, 
+                   # White
+                   enrollment_m_whit = EFWHITM, 
+                   enrollment_f_whit = EFWHITW, 
+                   # Two or More Races
+                   enrollment_m_2mor = EF2MORM, 
+                   enrollment_f_2mor = EF2MORW, 
+                   # Unknown / Undisclosed Race
+                   enrollment_m_unkn = EFUNKNM, 
+                   enrollment_f_unkn = EFUNKNW, 
+                   # US Non-Resident
+                   enrollment_m_nral = EFNRALM, 
+                   enrollment_f_nral = EFNRALW, 
+            ) |> filter(
+                (EFALEVEL %in% c(2, 12)) | (LINE %in% c(1, 15))
+                # Per 2024 Data Dictionary, 
+                # - EFALEVEL 2 = undergrad 
+                # - EFALELVE 12 = grad
+                # - Line 1 = first year first time full-time undergrad
+                # - Line 15 = first year first time part-time undergrad
+            ) |> mutate(level = case_when(
+                       EFALEVEL == 2 ~ "all undergrad", 
+                       EFALEVEL == 12 ~ "all graduate",
+                       LINE %in% c(1, 15) ~ "first year undergrad"
+                   )
+            ) |>
+            select(institution_id = UNITID, 
+                   year, 
+                   level,
+                   starts_with("enrollment_")) |>
+            group_by(institution_id, 
+                     year, 
+                     level) |>
+            summarize(across(starts_with("enrollment_"), sum), 
+                      .groups = "drop")
+        
+    }) |> bind_rows()
+    
+    DESC_ALL <- map(YEARS, function(yy){
+        if(yy <= 2022){
+            hd_url <- glue("https://nces.ed.gov/ipeds/datacenter/data/HD{yy}.zip")
+            
+        } else {
+            hd_url <- glue("https://nces.ed.gov/ipeds/data-generator?year={yy}&tableName=HD{yy}&HasRV=0&type=csv")
+        }
+        
+        hd_file <- file.path(data_dir, glue("hd{yy}.csv.zip"))
+        
+        if(!file.exists(hd_file)){
+            message(glue("Downloading Institutional Descriptions for {yy} from {hd_url}"))
+            download.file(hd_url, destfile = hd_file, quiet=TRUE, mode="wb")    
+        }
+        
+        suppressWarnings(
+            read_csv(hd_file, 
+                 show_col_types=FALSE, 
+                 locale=locale(encoding=if_else(yy==2024, "utf-8", "windows-1252"))) |>
+            mutate(year = yy, 
+                   INSTNM) |> 
+            select(institution_id = UNITID, 
+                   institution_name = INSTNM, 
+                   state = STABBR, 
+                   year)
+        )
+        
+    }) |> bind_rows()
+    
+    inner_join(EFA_ALL, 
+               DESC_ALL, 
+               join_by(institution_id == institution_id, 
+                       year == year))
+}
+
+IPEDS <- acquire_ipeds_data()
+```
+
+```{r}
+#| label: style-helper
+#| include: false
+style_gt <- function(gt_tbl) {
+  gt_tbl |>
+    opt_stylize(style = 6, color = "blue") |>
+    tab_options(
+      heading.align              = "left",
+      table.font.size            = "20px",
+      heading.title.font.size    = "22px",
+      heading.subtitle.font.size = "17px",
+      column_labels.font.weight  = "bold",
+      table.width                = "100%"
+    )
+}
+```
+
+
+```{r}
+# 1. Identify CUNY and California Public (UC/Cal State) systems
+IPEDS <- IPEDS |>
+    mutate(
+        # Task 2: Check the 'institution_name' column for "CUNY"
+        is_cuny = str_detect(institution_name, "CUNY"),
+        
+        # Task 3: Check for UC OR Cal State
+        is_calpublic = (str_detect(institution_name, "University of California") | 
+                        str_detect(institution_name, "California State University"))
+    )
+```
+
+```{r}
+# 2. CREATE the verification object 
+cal_schools_check <- IPEDS |>
+    filter(is_calpublic) |>
+    distinct(institution_name)
+```
+
+```{r}
+# 3. Create the formatted table
+cal_schools_check |>
+    head(10) |>
+    gt() |>
+    tab_header(
+        title = "California Public University System Verification",
+        subtitle = "Schools identified via name-matching logic"
+    ) |> 
+    style_gt()
+```
+
+## Exploratory Analysis
+
+::: {.callout-tip title="📋 Data Health Check"}
+The dataset contains 219,316 rows, representing a comprehensive view of 
+institutional enrollment. The summary below confirms data integrity across 
+the 15-year period.
+:::
+
+```{r}
+#| label: task-4-eda
+#| message: false
+#| warning: false
+
+# 1. View the structure and data types
+dplyr::glimpse(IPEDS)
+
+# 2. Generate a high-level summary
+skimr::skim(IPEDS)
+```
+
+After performing an initial pass on the IPEDS dataset, I verified that the data structure is consistent with the instructor's specifications. The dataset consists of **219,316 rows**, representing a comprehensive view of institutional enrollment over 15 years. Using the skimr package, I observed that while most numeric columns are well-populated, there are also missing values in specific demographic categories that must be handled. I used *na.rm = TRUE* which tells *r* to ignore *NULL* or missing values during calculations. The data types are correctly identified, with institutional ID's as numeric and names as character strings, providing a good setup for further analysis.
+
+---
+
+## Exploratory Questions
+
+```{r}
+#| label: task-5-calculations
+#| include: false
+
+# A. Data Prep: Calculate total enrollment per row 
+IPEDS_total <- IPEDS |>
+    mutate(total_enrollment = rowSums(across(starts_with("enrollment_")), na.rm = TRUE))
+
+# Q1: Distinct Institutions
+n_institutions <- IPEDS |> distinct(institution_id) |> nrow()
+
+# Q2: Baruch Graduate Students in 2024
+baruch_grad_2024 <- IPEDS_total |>
+    filter(str_detect(institution_name, "Baruch"), 
+           year == 2024, 
+           level == "all graduate") |>
+    pull(total_enrollment)
+
+# Q3: Total Baruch Students 2024
+baruch_total_2024 <- IPEDS_total |>
+    filter(str_detect(institution_name, "Baruch"), 
+           year == 2024, 
+           level %in% c("all undergrad", "all graduate")) |>
+    summarize(total = sum(total_enrollment)) |>
+    pull(total)
+
+# Q4: Highest number of enrolled female students in 2019
+female_top_2019 <- IPEDS_total |>
+    filter(year == 2019, level == "all undergrad") |>
+    mutate(total_female = rowSums(across(contains("_f_")), na.rm = TRUE)) |>
+    arrange(desc(total_female)) |>
+    slice(1)
+
+# Q5: Highest proportion of NHPI first-year undergrads (2024, >1000 students)
+nhpi_top_2024 <- IPEDS_total |>
+    filter(year == 2024, 
+           level == "first year undergrad", 
+           total_enrollment > 1000) |>
+    mutate(nhpi_prop = (enrollment_m_nhpi + enrollment_f_nhpi) / total_enrollment) |>
+    arrange(desc(nhpi_prop)) |>
+    slice(1)
+```
+
+My initial exploration of the data revealed several key metrics regarding the landscape of higher education and Baruch College specifically. There are `r scales::comma(n_institutions)` distinct institutions recorded in this dataset. In 2024, Baruch College had `r scales::comma(baruch_grad_2024)` graduate students enrolled. When considering the entire student body, the total enrollment at Baruch in 2024 reached `r scales::comma(baruch_total_2024)` students.
+
+Additionally, in 2019, `r female_top_2019$institution_name` led the way with the highest number of enrolled female undergraduates at `r scales::comma(female_top_2019$total_female)`. Looking at 2024 data for incoming classes, `r nhpi_top_2024$institution_name` admitted the highest proportion of Native Hawaiian or Pacific Islander first-year undergraduates among large institutions, representing `r scales::percent(nhpi_top_2024$nhpi_prop, accuracy=0.01)` of their first-year class.
+
+### Institutional Trends and Comparisons
+
+::: {.panel-tabset}
+
+## Top 5 Graduate Enrollment by State
+```{r}
+#| message: false
+#| warning: false
+IPEDS_total |>
+    filter(level == "all graduate") |>
+    group_by(state) |>
+    summarize(total_grad = sum(total_enrollment, na.rm = TRUE)) |>
+    arrange(desc(total_grad)) |>
+    slice(1:5) |>
+    gt() |>
+    tab_header(
+        title = "Top 5 States by Total Graduate Enrollment",
+        subtitle = "Cumulative enrollment from 2010-2024"
+    ) |>
+    cols_label(
+        state = "State", 
+        total_grad = "Total Students"
+    ) |>
+    fmt_number(columns = total_grad, decimals = 0) |>
+    tab_source_note("Source: IPEDS 2010–2024 via NCES. Cumulative headcount across all institutions.") |>
+    style_gt()
+```
+
+## Baruch Undergrad Enrollment Trends
+```{r}
+#| message: false
+#| warning: false
+IPEDS_total |>
+    filter(str_detect(institution_name, "Baruch"), 
+           level == "all undergrad") |>
+    arrange(year) |>
+    mutate(
+        change     = total_enrollment - lag(total_enrollment),
+        pct_change = (total_enrollment / lag(total_enrollment) - 1)
+    ) |>
+    select(year, total_enrollment, pct_change) |>
+    gt() |>
+    tab_header(
+        title    = "Baruch College Undergraduate Enrollment Trends",
+        subtitle = "Year-over-year change (2010–2024)"
+    ) |>
+    cols_label(
+        year             = "Year",
+        total_enrollment = "Total Undergrads",
+        pct_change       = "% Change"
+    ) |>
+    fmt_number(columns = total_enrollment, decimals = 0) |>
+    fmt_percent(columns = pct_change, decimals = 2) |>
+    sub_missing(columns = pct_change, missing_text = "—") |>
+    tab_source_note("Source: IPEDS 2010–2024 via NCES. First year shown has no prior-year comparison.") |>
+    style_gt()
+```
+
+## Baruch Racial Composition
+```{r}
+#| label: fig-baruch-composition
+#| fig-cap: "Baruch College undergraduate racial composition, 2010–2024"
+#| message: false
+#| warning: false
+
+IPEDS_total |>
+    filter(str_detect(institution_name, "Baruch"),
+           level == "all undergrad") |>
+    mutate(
+        Asian    = (enrollment_m_asia + enrollment_f_asia) / total_enrollment,
+        Black    = (enrollment_m_bkaa + enrollment_f_bkaa) / total_enrollment,
+        Hispanic = (enrollment_m_hisp + enrollment_f_hisp) / total_enrollment,
+        White    = (enrollment_m_whit + enrollment_f_whit) / total_enrollment,
+        Other    = 1 - Asian - Black - Hispanic - White
+    ) |>
+    select(year, Asian, Black, Hispanic, White, Other) |>
+    pivot_longer(-year, names_to = "race", values_to = "proportion") |>
+    ggplot(aes(x = year, y = proportion, fill = race)) +
+    geom_area(alpha = 0.85) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    scale_x_continuous(breaks = seq(2010, 2024, 2)) +
+    scale_fill_brewer(palette = "Set2") +
+    labs(title    = "Baruch College Undergraduate Racial Composition (2010–2024)",
+         subtitle = "Share of total undergraduate enrollment by racial group",
+         x = "Year", y = "Share of Enrollment", fill = "Group") +
+    theme_minimal(base_size = 14) +
+    theme(legend.position = "bottom")
+```
+
+## CUNY First-Year Enrollment Share 2024
+```{r}
+#| message: false
+#| warning: false
+total_fy_2024 <- IPEDS_total |>
+    filter(year == 2024, level == "first year undergrad") |>
+    summarize(total = sum(total_enrollment, na.rm = TRUE)) |>
+    pull(total)
+
+IPEDS_total |>
+    filter(year == 2024, level == "first year undergrad", is_cuny) |>
+    mutate(
+        institution_name = str_remove(institution_name, "CUNY "),
+        pct_of_us        = total_enrollment / total_fy_2024
+    ) |>
+    select(institution_name, total_enrollment, pct_of_us) |>
+    arrange(desc(total_enrollment)) |>
+    gt() |>
+    tab_header(
+        title    = "CUNY First-Year Enrollment Share (2024)",
+        subtitle = "Each campus as a share of all U.S. first-year undergraduates"
+    ) |>
+    cols_label(
+        institution_name = "Campus",
+        total_enrollment = "First-Year Students",
+        pct_of_us        = "Share of U.S. Total"
+    ) |>
+    fmt_number(columns = total_enrollment, decimals = 0) |>
+    fmt_percent(columns = pct_of_us, decimals = 3) |>
+    tab_source_note("Source: IPEDS 2024 via NCES. 'CUNY' prefix removed from campus names for readability.") |>
+    style_gt()
+```
+
+## CUNY Enrollment by Campus
+```{r}
+#| label: fig-cuny-bar
+#| fig-cap: "CUNY first-year enrollment by campus, 2024"
+#| message: false
+#| warning: false
+
+IPEDS_total |>
+    filter(year == 2024, level == "first year undergrad", is_cuny) |>
+    mutate(institution_name = str_remove(institution_name, "CUNY ")) |>
+    arrange(total_enrollment) |>
+    mutate(institution_name = fct_inorder(institution_name)) |>
+    ggplot(aes(x = total_enrollment, y = institution_name)) +
+    geom_col(fill = "#2c7bb6") +
+    geom_text(aes(label = scales::comma(total_enrollment)),
+              hjust = -0.1, size = 4) +
+    scale_x_continuous(labels = scales::comma,
+                       expand = expansion(mult = c(0, 0.15))) +
+    labs(title = "CUNY First-Year Enrollment by Campus (2024)",
+         x = "First-Year Students", y = NULL) +
+    theme_minimal(base_size = 14)
+```
+
+## Diversity Decreases
+```{r}
+#| message: false
+#| warning: false
+IPEDS_total |>
+    filter(year %in% c(2010, 2020), level == "all undergrad") |>
+    filter(total_enrollment > 1000) |>
+    mutate(white_prop = (enrollment_m_whit + enrollment_f_whit) / total_enrollment) |>
+    select(institution_id, institution_name, year, white_prop) |>
+    pivot_wider(
+        id_cols    = c(institution_id, institution_name),
+        names_from = year,
+        values_from = white_prop
+    ) |>
+    rename(white_prop_2010 = `2010`, white_prop_2020 = `2020`) |>
+    filter(!is.na(white_prop_2010) & !is.na(white_prop_2020)) |>
+    mutate(diff = white_prop_2020 - white_prop_2010) |>
+    arrange(diff) |>
+    slice(1:5) |>
+    select(institution_name, white_prop_2010, white_prop_2020, diff) |>
+    gt() |>
+    tab_header(
+        title    = "Largest Decrease in White Student Fraction (2010–2020)",
+        subtitle = "Limited to institutions with more than 1,000 undergraduates"
+    ) |>
+    cols_label(
+        institution_name = "Institution",
+        white_prop_2010  = "2010",
+        white_prop_2020  = "2020",
+        diff             = "Change"
+    ) |>
+    fmt_percent(columns = c(white_prop_2010, white_prop_2020, diff), decimals = 2) |>
+    tab_source_note("Source: IPEDS 2010 & 2020 via NCES. Change = 2020 minus 2010 white student share.") |>
+    style_gt()
+```
+
+## Female Undergrad Growth by State
+```{r}
+IPEDS_total |>
+    filter(year %in% c(2010, 2024), level == "all undergrad") |>
+    mutate(female_prop = rowSums(across(contains("_f_")), 
+                                 na.rm = TRUE) / total_enrollment) |>
+    select(state, year, female_prop) |>
+    group_by(state, year) |>
+    summarize(female_prop = mean(female_prop, na.rm = TRUE), 
+              .groups = "drop") |>
+    pivot_wider(names_from = year, values_from = female_prop) |>
+    rename(prop_2010 = `2010`, prop_2024 = `2024`) |>
+    filter(!is.na(prop_2010) & !is.na(prop_2024)) |>
+    mutate(diff = prop_2024 - prop_2010) |>
+    arrange(desc(diff)) |>
+    slice(1:3) |>
+    gt() |>
+    tab_header(
+        title    = "States with Largest Increase in Female Undergraduates",
+        subtitle = "Change in female share of undergraduate enrollment, 2010–2024"
+    ) |>
+    cols_label(
+        state     = "State",
+        prop_2010 = "2010",
+        prop_2024 = "2024",
+        diff      = "Change"
+    ) |>
+    fmt_percent(columns = c(prop_2010, prop_2024, diff), decimals = 2) |>
+    tab_source_note("Source: IPEDS 2010 & 2024 via NCES.") |>
+    style_gt()
+```
+
+:::
+
+## Final Insights and Deliverable
+
+```{r}
+#| label: op-ed-calculations
+#| include: false
+
+# Define a "Minority Diversity Index": 
+# Fraction of students identifying as Black, Hispanic, AIAN, NHPI, or 2+ Races.
+minority_cols <- c("enrollment_m_aian", "enrollment_f_aian", 
+                   "enrollment_m_bkaa", "enrollment_f_bkaa", 
+                   "enrollment_m_hisp", "enrollment_f_hisp", 
+                   "enrollment_m_nhpi", "enrollment_f_nhpi", 
+                   "enrollment_m_2mor", "enrollment_f_2mor")
+
+# Calculate Diversity Index for Baruch vs. California Publics
+diversity_data <- IPEDS_total |>
+    mutate(minority_enrollment = rowSums(across(all_of(minority_cols)), na.rm = TRUE),
+           diversity_idx = minority_enrollment / total_enrollment)
+
+# Baruch Stats
+baruch_stats <- diversity_data |>
+    filter(str_detect(institution_name, "Baruch"), level == "first year undergrad") |>
+    filter(year %in% c(2023, 2024)) |>
+    select(year, diversity_idx) |>
+    pivot_wider(names_from = year, values_from = diversity_idx, names_prefix = "yr_")
+
+# California Stats (Race-Neutral Control Group)
+cal_stats <- diversity_data |>
+    filter(is_calpublic, level == "first year undergrad") |>
+    filter(year %in% c(2023, 2024)) |>
+    group_by(year) |>
+    summarize(avg_diversity = mean(diversity_idx, na.rm = TRUE)) |>
+    pivot_wider(names_from = year, values_from = avg_diversity, names_prefix = "yr_")
+
+# Extract as plain scalars for inline use
+baruch_2023 <- baruch_stats$yr_2023[[1]]
+baruch_2024 <- baruch_stats$yr_2024[[1]]
+cal_2023    <- cal_stats$yr_2023[[1]]
+cal_2024    <- cal_stats$yr_2024[[1]]
+
+```
+
+
+The chart below tracks Baruch's minority diversity index from 2010 through 
+the first post-SFFA admissions cycle.
+
+```{r}
+#| label: fig-baruch-diversity
+#| fig-cap: "Baruch College first-year minority diversity index, 2010–2024"
+#| message: false
+#| warning: false
+
+diversity_data |>
+    filter(str_detect(institution_name, "Baruch"), 
+           level == "first year undergrad") |>
+    ggplot(aes(x = year, y = diversity_idx)) +
+    geom_line(linewidth = 1.2, color = "#2c7bb6") +
+    geom_point(size = 3, color = "#2c7bb6") +
+    geom_vline(xintercept = 2023, linetype = "dashed", 
+               color = "red", linewidth = 0.8) +
+    annotate("text", x = 2023.2, y = 0.5, 
+             label = "SFFA Decision", hjust = 0, color = "red") +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                       limits = c(0, 1)) +
+    scale_x_continuous(breaks = seq(2010, 2024, 2)) +
+    labs(title    = "Baruch College: First-Year Minority Diversity Index",
+         subtitle = "Fraction of incoming students identifying as Black, Hispanic, AIAN, NHPI, or Multiracial",
+         x = "Year", y = "Diversity Index") +
+    theme_minimal(base_size = 14)
+```
+
+When compared, Baruch's and California public universities' diversity indices show similar year-over-year fluctuations, suggesting that the observed changes may reflect normal demographic variation rather than a structural shift post-SFFA.
+
+```{r}
+#| label: fig-baruch-vs-cal
+#| fig-cap: "Diversity index comparison: Baruch vs. California public universities"
+#| message: false
+#| warning: false
+
+baruch_trend <- diversity_data |>
+    filter(str_detect(institution_name, "Baruch"),
+           level == "first year undergrad") |>
+    group_by(year) |>
+    summarize(diversity_idx = mean(diversity_idx, na.rm = TRUE)) |>
+    mutate(system = "Baruch College")
+
+cal_trend <- diversity_data |>
+    filter(is_calpublic, level == "first year undergrad") |>
+    group_by(year) |>
+    summarize(diversity_idx = mean(diversity_idx, na.rm = TRUE)) |>
+    mutate(system = "California Public Universities")
+
+bind_rows(baruch_trend, cal_trend) |>
+    ggplot(aes(x = year, y = diversity_idx, 
+               color = system, linetype = system)) +
+    geom_line(linewidth = 1.2) +
+    geom_point(size = 2.5) +
+    geom_vline(xintercept = 2023, linetype = "dashed",
+               color = "red", linewidth = 0.8) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    scale_x_continuous(breaks = seq(2010, 2024, 2)) +
+    scale_color_manual(values = c("Baruch College" = "#2c7bb6",
+                                  "California Public Universities" = "#d7191c")) +
+    labs(title    = "First-Year Diversity Index: Baruch vs. California",
+         subtitle = "Red dashed line marks the 2023 SFFA Supreme Court decision",
+         x = "Year", y = "Diversity Index",
+         color = NULL, linetype = NULL) +
+    theme_minimal(base_size = 14) +
+    theme(legend.position = "bottom")
+```
+
+::: {.callout-tip icon="false" title="✍️ Diversity as a Demographic Destiny: A Baruch Perspective"}
+*By President Raúl J. Solá Navarro*
+
+At Baruch College, we define diversity as the proportion of students who self-identify as Black, Hispanic, American Indian or Alaskan Native, Native Hawaiian or Pacific Islander, or Multiracial. These are groups historically underrepresented at higher education institutions in the United States. The definition, consistent with IPEDS reporting categories, intentionally excludes White and Asian-American students, reflecting the social context in which affirmative action policies were originally founded on.
+
+Our student body is a living reflection of New York City itself (see the "Baruch Racial Composition" chart under the "Institutional Trends and Comparisons" section). As of 2024, Baruch enrolls `r scales::comma(baruch_total_2024)` students across undergraduate and graduate programs, making it one of the most multicultural institutions in the CUNY system. The stacked area chart above tells a compelling story: over the 2010–2024 period, Baruch's total undergraduate body has grown increasingly diverse, with Hispanic and Asian enrollment expanding steadily while the White student proportion has contracted. Over the years, the shift has been gradual and not the product of any single policy, but of the demographic trajectory of New York City itself flowing organically into our classrooms.
+
+The 2023 Students for Fair Admissions (SFFA) Supreme Court decision has forced institutions in the United States to reconsider how they define a fair admission's process. At Baruch, we don't think of diversity as a quota, but as a demographic reality that reflects the composition of the City.
+
+Looking at our incoming class, Baruch's first-year minority representation was `r scales::percent(baruch_2023, accuracy=0.1)` in 2023 and held steady at `r scales::percent(baruch_2024, accuracy=0.1)` in the first post-SFFA admissions cycle of 2024. This stability is itself a finding worth noting. At an institution like Baruch, where minority students already constitute a substantial majority of the incoming class, the removal of race-conscious admissions tools produced no measurable disruption. 
+
+Shifting our focus to California, public universities there have operated under race-neutral admissions mandates since Proposition 209 in 1996. This means that the SFFA decision should have had no practical effect on their policies. In 2023, the California public system's average first-year diversity index stood at `r scales::percent(cal_2023, accuracy=0.1)` and shifted to `r scales::percent(cal_2024, accuracy=0.1)` in 2024; this reflects a change of just `r scales::percent(abs(cal_2024 - cal_2023), accuracy=0.1)`. The fact that Baruch's year-over-year movement is comparably small to Baruch's, suggests that what we are observing may reflect normal demographic variation rather than a structural post-SFFA shift.
+
+The stability in California, and the resilience at Baruch, suggests that institutional mission and local demographics may be stronger forces than even the Supreme Court's majority opinion. Our challenge moving forward is to remain true to what our institution stands for by doubling down on the pipeline programs, transfer pathways, and community partnerships that ensure every New Yorker sees a seat for themselves at our table.
+
+:::
+
+------------------------------------------------------------------------
+
+::: {.callout-note title="Generative AI Disclosure" collapse="true"}
+In completing this mini-project, I used Claude (Anthropic) and Gemini (Google) to assist with debugging R code errors, specifically regarding pivot_wider list-column issues, gt table styling, and Quarto rendering. All analytical framing, written text, and interpretations are my own.
+:::
+
+::: {style="text-align: center; font-size: 0.8em; color: gray; margin-top: 2em;"}
+This work ©2026 by Raúl J. Solá Navarro was prepared as a Mini-Project for  
+[STA 9750](https://michael-weylandt.com/STA9750) at Baruch College · [MP #01 Instructions](https://michael-weylandt.com/STA9750/mini/mini01.html)
+:::
