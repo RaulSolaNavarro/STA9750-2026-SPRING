@@ -670,7 +670,7 @@ The stability in California, and the resilience at Baruch, suggests that institu
 
 ------------------------------------------------------------------------
 
-::: {.callout-note title="Generative AI Disclosure" collapse="true"}
+::: {.callout-note title="AI Usage Statement" collapse="true"}
 In completing this mini-project, I used Claude (Anthropic) and Gemini (Google) to assist with debugging R code errors, specifically regarding pivot_wider list-column issues, gt table styling, and Quarto rendering. All analytical framing, written text, and interpretations are my own.
 :::
 
