@@ -1,0 +1,114 @@
+/*-- scss:rules --*/
+
+/* ── Warm earth tone palette ─────────────────────────────────────────────── */
+:root {
+  --earth-brown:   #6B4C3B;
+  --earth-tan:     #C4A882;
+  --earth-cream:   #F5F0E8;
+  --earth-olive:   #7C7A52;
+  --earth-rust:    #A0522D;
+  --earth-dark:    #3B2F2F;
+}
+
+body {
+  background-color: #FDFAF5;
+  color: var(--earth-dark);
+}
+
+h1, h2, h3, h4 {
+  color: #956C3B;
+  font-family: Georgia, serif;
+}
+
+h2 {
+  border-bottom: 2px solid #C4A882;
+  padding-bottom: 0.3em;
+  margin-top: 1.8em;
+}
+
+h3 {
+  color: #D55E00;
+}
+
+#TOC {
+  background-color: #F5F0E8;
+  border-left: 4px solid #C4A882;
+  padding: 1em;
+  border-radius: 6px;
+}
+
+#TOC a {
+  color: #956C3B;
+}
+
+#TOC a:hover {
+  color: #D55E00;
+  text-decoration: underline;
+}
+
+details {
+  background-color: #F5F0E8;
+  border: 1px solid #C4A882;
+  border-radius: 6px;
+  padding: 0.4em 0.8em;
+  margin-bottom: 1em;
+}
+
+.callout-note {
+  border-left-color: #C4A882 !important;
+  background-color: #F5F0E8 !important;
+}
+
+hr {
+  border-color: #C4A882;
+  margin: 2em 0;
+}
+
+a {
+  color: #D55E00;
+}
+
+a:hover {
+  color: #956C3B;
+}
+
+/* ── Title banner ────────────────────────────────────────────────────────── */
+.quarto-title-banner {
+  background-color: #956C3B !important;
+  color: #FDFAF5 !important;
+}
+
+.quarto-title-banner .title {
+  color: #FDFAF5 !important;
+}
+
+.quarto-title-banner .quarto-title-meta-contents,
+.quarto-title-banner .quarto-title-meta-heading {
+  color: #F5F0E8 !important;
+}
+
+/* ── Navbar (if present) ─────────────────────────────────────────────────── */
+.navbar {
+  background-color: #6B4C3B !important;
+}
+
+.navbar-brand, .nav-link {
+  color: #FDFAF5 !important;
+}
+
+/* ── Override course navbar color ───────────────────────────────────────── */
+.navbar {
+  background-color: #956C3B !important;
+  border-bottom: 3px solid #6B4C3B !important;
+}
+
+.navbar-brand, 
+.navbar .nav-link,
+.navbar-nav .nav-link {
+  color: #FDFAF5 !important;
+}
+
+.navbar-brand:hover,
+.navbar .nav-link:hover {
+  color: #F0E442 !important;
+}
