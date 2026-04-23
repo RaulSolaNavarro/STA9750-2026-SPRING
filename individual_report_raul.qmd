@@ -1,0 +1,327 @@
+---
+title: "SQ2: Does Neighborhood Income Affect 311 Resolution Times?"
+author: "Raúl J. Solá Navarro"
+date: today
+format:
+  html:
+    toc: true
+    number-sections: true
+    toc-depth: 3
+    code-fold: true
+    code-tools: true
+    self-contained: true
+    output-file: "individual_report_raul.html"
+output-dir: docs
+---
+
+## Overarching Question
+
+What factors drive 311 service request response and resolution times 
+and do they suggest segmented prioritization of issues?
+
+## Specific Question
+
+Do lower-income NYC census tracts experience longer 311 service request 
+resolution times, and does this pattern hold across complaint types?
+
+This report examines whether neighborhood income, measured as median 
+household income at the census tract level, is associated with how 
+quickly NYC agencies resolve 311 service requests. Using 12.6 million 
+closed requests from 2022-2025 and ACS income data, we find a modest 
+but meaningful raw disparity: the lowest-income neighborhoods wait 
+about 43% longer than the wealthiest. However, after controlling for 
+complaint type and borough, much of that gap is explained by *what* 
+neighborhoods request, not *where* they are.
+
+## Data Sources
+
+### NYC 311 Service Requests (2022–2025)
+Pulled via the NYC Open Data Socrata API. Filtered to closed requests 
+with valid coordinates and resolution times between 0 and 8,760 hours 
+(1 year). Final cleaned dataset: 12.6 million requests.
+
+### American Community Survey (tidycensus)
+Median household income (variable B19013_001) at the census tract level 
+for all five NYC boroughs, from the 2019-2023 5-year ACS. Retrieved via 
+the `tidycensus` R package with tract geometries for spatial joining.
+2,327 census tracts; 5.8% excluded due to missing income estimates.
+
+## Data Acquisition
+
+All data is loaded from pre-processed local files. Raw data was acquired 
+via the NYC Open Data Socrata API (311 requests) and the `tidycensus` R 
+package (ACS income estimates). See `data_pull.R` and 
+`data_clean_census.R` for the full acquisition code.
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(sf)
+library(tidycensus)
+library(kableExtra)
+library(patchwork)
+
+# Load pre-computed results
+df               <- readRDS("data/clean_311_final.rds")
+nyc_income       <- readRDS("data/nyc_income_tracts.rds")
+boot_ci          <- readRDS("data/boot_ci.rds")
+model_results    <- readRDS("data/model_results.rds")
+tract_summary    <- readRDS("data/tract_summary.rds")
+quintile_summary <- readRDS("data/quintile_summary.rds")
+```
+
+## Data Quality
+
+The 311 dataset required removal of 466,215 records (3.6%) with missing 
+dates, negative resolution times, or unspecified boroughs. Of the 
+2,327 census tracts, 5.8% had missing income estimates and 11% had 
+high margins of error (CV > 50%). The quintile-based analysis approach 
+is robust to individual tract-level noise, since bucketing tracts into 
+five groups is far less sensitive to noisy individual estimates than 
+treating income as a precise continuous measure.
+
+## Exploratory Data Analysis
+
+Resolution times are heavily right-skewed having most requests resolve 
+within hours, but a long tail of slow resolutions pulls the mean to 
+236 hours. The table and charts below summarize the key patterns.
+
+```{r}
+#| message: false
+#| warning: false
+
+quintile_summary |>
+  mutate(
+    income_quintile = c("Q1 (Lowest)", "Q2", "Q3", "Q4", "Q5 (Highest)"),
+    median_hours = round(median_hours, 2),
+    mean_hours = round(mean_hours, 1),
+    n = scales::comma(n)
+  ) |>
+  kable(
+    caption = "Median and mean 311 resolution time by neighborhood income quintile",
+    col.names = c("Income Quintile", "Median Hours",
+                  "Mean Hours", "Requests"),
+    align = "lrrr"
+  ) |>
+  kable_styling(bootstrap_options = c("striped", "hover"),
+                full_width = TRUE) |>
+  column_spec(1, width = "25%") |>
+  column_spec(2, width = "25%") |>
+  column_spec(3, width = "25%") |>
+  column_spec(4, width = "25%")
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-cap: "Resolution time is heavily right-skewed; log scale reveals a cleaner distribution"
+
+df |>
+  slice_sample(n = 500000) |>
+  ggplot(aes(x = resolution_hours)) +
+  geom_histogram(bins = 100, fill = "steelblue", color = NA) +
+  scale_x_log10(labels = scales::comma) +
+  labs(
+    title = "Distribution of 311 Resolution Times",
+    x = "Resolution Time (hours, log scale)",
+    y = "Count"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-cap: "Lower-income quintiles generally show longer median resolution times"
+
+quintile_summary |>
+  mutate(income_quintile = factor(income_quintile,
+    labels = c("Q1\n(Lowest)", "Q2", "Q3", "Q4", "Q5\n(Highest)"))) |>
+  ggplot(aes(x = income_quintile, y = median_hours,
+             fill = income_quintile)) +
+  geom_col() +
+  scale_fill_manual(values = c(
+    "Q1\n(Lowest)" = "#084594",
+    "Q2"           = "#2171b5",
+    "Q3"           = "#4292c6",
+    "Q4"           = "#6baed6",
+    "Q5\n(Highest)"= "#c6dbef"
+  )) +
+  labs(
+    title = "Median 311 Resolution Time by Neighborhood Income Quintile",
+    x = "Income Quintile",
+    y = "Median Resolution Time (hours)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-cap: "Each point is one census tract (min. 50 requests). The loess curve shows a non-linear relationship between income and resolution time."
+
+tract_summary_income <- df |>
+  filter(!is.na(geoid), !is.na(median_income)) |>
+  group_by(geoid, median_income) |>
+  summarise(median_hours = median(resolution_hours),
+            n = n(), .groups = "drop") |>
+  filter(n >= 50)
+
+ggplot(tract_summary_income,
+       aes(x = median_income, y = median_hours)) +
+  geom_point(alpha = 0.3, size = 0.8, color = "steelblue") +
+  geom_smooth(method = "loess", color = "red", se = TRUE) +
+  scale_x_continuous(labels = scales::dollar) +
+  scale_y_log10(labels = scales::comma) +
+  labs(
+    title = "Tract-Level Income vs. Median 311 Resolution Time",
+    x = "Median Household Income",
+    y = "Median Resolution Time (hours, log scale)",
+    caption = "Loess smoothing line with 95% CI"
+  ) +
+  theme_minimal()
+```
+
+## Analysis
+
+### Regression Model
+
+To isolate the income effect, we fit an OLS regression of 
+log(resolution time) on income quintile, controlling for complaint 
+type and borough. Logging the outcome reduces the influence of extreme 
+outliers and makes coefficients interpretable as approximate percentage 
+differences.
+
+```{r}
+#| message: false
+#| warning: false
+
+model_results |>
+  mutate(
+    term = c("Q2", "Q3", "Q4", "Q5 (Highest)"),
+    estimate = round(estimate, 4),
+    pct_difference = paste0(pct_difference, "%"),
+    p.value = ifelse(p.value < 0.001, "< 0.001", formatC(p.value, format = "e", digits = 2))
+  ) |>
+  select(term, estimate, pct_difference, p.value) |>
+  kable(
+    caption = "Income quintile coefficients from OLS regression, relative to Q1",
+    col.names = c("Quintile vs Q1", "Estimate (log hrs)",
+                  "% Difference", "P-value"),
+    align = "lrrr"
+  ) |>
+  kable_styling(bootstrap_options = c("striped", "hover"),
+                full_width = TRUE) |>
+  column_spec(1, width = "25%") |>
+  column_spec(2, width = "25%") |>
+  column_spec(3, width = "25%") |>
+  column_spec(4, width = "25%")
+```
+
+### Bootstrap Confidence Intervals
+
+To assess uncertainty without relying on OLS standard errors, we 
+bootstrap the regression using 200 iterations on a 10,000-row sample. 
+The resulting 95% confidence intervals confirm that the income effect, 
+while statistically detectable, is modest in magnitude.
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-cap: "Bootstrap 95% CIs for income quintile effects relative to Q1"
+
+boot_ci |>
+  mutate(term = recode(term,
+    "income_quintile2" = "Q2",
+    "income_quintile3" = "Q3",
+    "income_quintile4" = "Q4",
+    "income_quintile5" = "Q5 (Highest)"
+  )) |>
+  ggplot(aes(x = term, y = mean_estimate,
+             ymin = ci_lower, ymax = ci_upper)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
+  geom_errorbar(width = 0.2, color = "steelblue") +
+  geom_point(size = 3, color = "steelblue") +
+  labs(
+    title = "Effect of Income Quintile on Log Resolution Time",
+    subtitle = "Relative to Q1 (Lowest Income), controlling for complaint type and borough",
+    x = "Income Quintile",
+    y = "Estimated Effect (log hours)",
+    caption = "Bootstrap 95% CI, 200 iterations, n=10,000 sample"
+  ) +
+  theme_minimal()
+```
+
+## Maps
+
+The two maps below allow direct visual comparison of neighborhood 
+income and 311 resolution times across NYC census tracts. If income 
+were a strong driver of resolution time, the spatial patterns would 
+closely mirror each other.
+
+```{r}
+#| message: false
+#| warning: false
+#| fig-cap: "Median household income (left) and 311 resolution time (right) by census tract"
+#| fig-width: 12
+
+tract_map <- nyc_income |>
+  left_join(tract_summary, by = "geoid") |>
+  st_transform(crs = 4326)
+
+map_income <- ggplot(tract_map) +
+  geom_sf(aes(fill = estimate), color = NA) +
+  scale_fill_viridis_c(
+    option = "viridis",
+    labels = scales::dollar,
+    name = "Median Income"
+  ) +
+  labs(title = "Median Household Income",
+       subtitle = "NYC, 2019–2023 ACS") +
+  theme_void()
+
+map_resolution <- ggplot(tract_map) +
+  geom_sf(aes(fill = median_hours), color = NA) +
+  scale_fill_viridis_c(
+    option = "magma",
+    direction = -1,
+    trans = "log10",
+    labels = scales::comma,
+    name = "Median Hours\n(log scale)"
+  ) +
+  labs(title = "Median 311 Resolution Time",
+       subtitle = "NYC, 2022–2025",
+       caption = "Tracts with fewer than 50 requests excluded") +
+  theme_void()
+
+map_income + map_resolution
+```
+
+## Findings
+
+The raw data shows that Q1 (lowest income) tracts have a median 
+resolution time of 8.64 hours versus 6.06 hours for Q5 (highest 
+income), resulting in a 43% gap. However, after controlling for 
+complaint type and borough, the income effect weakens considerably 
+and becomes non-linear. This suggests that much of the apparent 
+disparity is driven by the *types* of complaints filed in different 
+neighborhoods rather than income itself.
+
+Notable exceptions include HEAT/HOT WATER complaints, which show 
+little income variation due to strict legal [SLAs](https://data.cityofnewyork.us/City-Government/311-Service-Level-Agreements/cs9t-e3x8/about_data), 
+and UNSANITARY CONDITION complaints, where wealthy tracts show 
+dramatically longer resolution times. The spatial maps reinforce the 
+finding that resolution time patterns do not closely mirror the income 
+map, suggesting other factors are at play.
+
+## Limitations
+
+- ACS income estimates reflect 2019-2023 averages and may not 
+  capture recent changes
+- "Closed" status may reflect administrative closure rather than 
+  genuine resolution
+- Bootstrap inference used a 10,000-row sample due to computational 
+  constraints
+- 11% of tracts have high margins of error (CV > 50%) in income estimates
