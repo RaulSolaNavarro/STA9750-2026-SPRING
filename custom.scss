@@ -1,0 +1,41 @@
+/*-- scss:defaults --*/
+$navbar-bg: #1a1a2e;
+$navbar-fg: #ffffff;
+
+/*-- scss:rules --*/
+
+/* Space after tables */
+.kable-table {
+  margin-bottom: 2rem;
+}
+
+/* Space before and after section headings */
+h2 {
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+h3 {
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Space after figures and their captions */
+.quarto-figure {
+  margin-bottom: 2rem;
+}
+
+.figure-caption {
+  margin-bottom: 1.5rem;
+}
+
+/* General paragraph breathing room */
+p {
+  margin-bottom: 1.1rem;
+  line-height: 1.7;
+}
+
+/* Space after code output blocks */
+.cell-output {
+  margin-bottom: 1.5rem;
+}

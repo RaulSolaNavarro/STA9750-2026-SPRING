@@ -1,5 +1,6 @@
 ---
 title: "SQ2: Does Neighborhood Income Affect 311 Resolution Times?"
+subtitle: "STA 9750 Course Project - Group 2"
 author: "Raúl J. Solá Navarro"
 date: today
 format:
@@ -11,7 +12,11 @@ format:
     code-tools: true
     self-contained: true
     output-file: "individual_report_raul.html"
+    theme: [litera, custom.scss]
 output-dir: docs
+execute:
+  fig-width: 8
+  fig-height: 5
 ---
 
 ## Overarching Question
@@ -35,7 +40,7 @@ neighborhoods request, not *where* they are.
 
 ## Data Sources
 
-### NYC 311 Service Requests (2022–2025)
+### NYC 311 Service Requests (2022-2025)
 Pulled via the NYC Open Data Socrata API. Filtered to closed requests 
 with valid coordinates and resolution times between 0 and 8,760 hours 
 (1 year). Final cleaned dataset: 12.6 million requests.
@@ -112,6 +117,14 @@ quintile_summary |>
   column_spec(4, width = "25%")
 ```
 
+The table above reveals an interesting pattern: Q1 and Q2 
+(the two lowest-income quintiles) have the longest median resolution 
+times at 8.64 and 9.78 hours respectively, while Q5 (highest income) 
+resolves fastest at 6.06 hours. Notably, the mean hours tell a 
+different story. Q5 has the highest mean (291 hours), suggesting 
+that wealthy neighborhoods have more extreme outliers that pull the 
+average up despite faster typical resolution.
+
 ```{r}
 #| message: false
 #| warning: false
@@ -129,6 +142,13 @@ df |>
   ) +
   theme_minimal()
 ```
+
+The bimodal shape on the log scale is worth noting. There are two 
+distinct peaks, one around 1 hour (likely quick noise and parking 
+complaints resolved by NYPD) and another around 100 hours (likely 
+longer-term infrastructure or housing complaints). This suggests that 
+complaint type is a strong driver of resolution time, which motivates 
+our regression controls below.
 
 ```{r}
 #| message: false
@@ -157,6 +177,11 @@ quintile_summary |>
   theme(legend.position = "none")
 ```
 
+The general downward trend from Q1/Q2 to Q5 is visible, though not 
+perfectly monotonic, Q2 is actually slower than Q1. This non-linearity 
+hints that income alone may not be the primary driver, and that the 
+mix of complaint types filed in each income tier plays an important role.
+
 ```{r}
 #| message: false
 #| warning: false
@@ -183,6 +208,15 @@ ggplot(tract_summary_income,
   ) +
   theme_minimal()
 ```
+
+The loess curve reveals a non-linear relationship: resolution times 
+rise slightly from the lowest-income tracts up to around $50,000 
+median income, then gradually decline through the $200,000 range, 
+with a sharper drop for the wealthiest tracts. The wide vertical 
+spread of points throughout indicates substantial tract-level 
+variation that income alone cannot explain, mainly because two tracts 
+with the same income can have very different resolution times depending on 
+what their residents typically report.
 
 ## Analysis
 
@@ -220,6 +254,15 @@ model_results |>
   column_spec(4, width = "25%")
 ```
 
+After controlling for complaint type and borough, the income pattern 
+shifts considerably. Q2 through Q5 all show small effects relative 
+to Q1, and the direction is not monotonic. Q3 and Q4 are actually 
+*slower* than Q1 by 3.4% and 5.1% respectively, while Q5 is 3.6% 
+faster. All effects are statistically significant given the large 
+sample size, but the magnitudes are modest. This suggests that much 
+of the raw disparity seen in the EDA is driven by *what types of 
+complaints* different neighborhoods file, rather than income itself.
+
 ### Bootstrap Confidence Intervals
 
 To assess uncertainty without relying on OLS standard errors, we 
@@ -253,6 +296,14 @@ boot_ci |>
   ) +
   theme_minimal()
 ```
+
+The confidence intervals reinforce the regression finding. Only Q4 
+shows a clearly positive effect relative to Q1 since its interval barely 
+excludes zero. Q2, Q3, and Q5 all have intervals that include zero, 
+meaning we cannot rule out no income effect for those quintiles once 
+complaint type and borough are accounted for. This is an important 
+nuance: the raw disparity is real, but it is largely mediated by the 
+types of service requests that lower-income neighborhoods tend to file.
 
 ## Maps
 
@@ -309,9 +360,9 @@ and becomes non-linear. This suggests that much of the apparent
 disparity is driven by the *types* of complaints filed in different 
 neighborhoods rather than income itself.
 
-Notable exceptions include HEAT/HOT WATER complaints, which show 
+Notable exceptions include "Heat/Hot Water" complaints, which show 
 little income variation due to strict legal [SLAs](https://data.cityofnewyork.us/City-Government/311-Service-Level-Agreements/cs9t-e3x8/about_data), 
-and UNSANITARY CONDITION complaints, where wealthy tracts show 
+and "Unsanitary Conditions" complaints, where wealthy tracts show 
 dramatically longer resolution times. The spatial maps reinforce the 
 finding that resolution time patterns do not closely mirror the income 
 map, suggesting other factors are at play.
@@ -325,3 +376,16 @@ map, suggesting other factors are at play.
 - Bootstrap inference used a 10,000-row sample due to computational 
   constraints
 - 11% of tracts have high margins of error (CV > 50%) in income estimates
+
+::: {.callout-note title="AI Usage Statement" collapse="true"}
+Claude (Anthropic) was used in this project to assist with R code 
+generation, debugging, and structuring the analytical pipeline. Specifically, 
+AI assistance was used to help write and troubleshoot the Socrata API 
+data pull, spatial join logic between 311 requests and census tract 
+geometries using the `sf` package, `tidycensus` data acquisition, 
+regression modeling, bootstrap inference, and `ggplot2` visualization 
+code. All written narrative text, including the introduction, interpretive 
+paragraphs, and conclusion, was written by the student without AI 
+assistance, in accordance with course policy. AI was not used to write 
+or edit any non-code text in this report.
+:::
