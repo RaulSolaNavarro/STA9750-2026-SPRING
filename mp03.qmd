@@ -2565,5 +2565,5 @@ for assistance with R code - specifically for debugging data parsing issues
 with the Census Bureau Excel files, troubleshooting the population projection
 model, and refining ggplot2 and gt table formatting. All written narrative,
 analytical interpretations, and conclusions are my own. No AI was used to
-write or edit any non-code text in this report.
+write any non-code text in this report.
 :::
