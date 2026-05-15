@@ -1,5 +1,5 @@
 ---
-title: "Home Field Advantage: Forecasting Team USA's Gold Medal Haul at LA 2028"
+title: "Home Field Advantage: Forecasting Team USA's Gold Medals at LA 2028"
 author: "Raúl J. Solá Navarro"
 date: today
 format:
@@ -9,7 +9,8 @@ format:
     code-fold: true
     code-summary: "Show code"
     theme: flatly
-    embed-resources: true
+    embed-resources: false
+    self-contained: false
     css: mp04-styles.css
 execute:
   warning: false
