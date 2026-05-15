@@ -3,7 +3,7 @@ project:
   output-dir: docs
 
 website:
-  title: "STA 9750 Submission Material"
+  title: "Data Analysis - Research Reports"
   description:
     Course Projects for STA 9750 at Baruch College
   site-url: "https://RaulSolaNavarro.github.io/STA9750-2026-SPRING/"

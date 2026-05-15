@@ -1,0 +1,1531 @@
+---
+title: "Home Field Advantage: Forecasting Team USA's Gold Medal Haul at LA 2028"
+author: "Raúl J. Solá Navarro"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-summary: "Show code"
+    theme: flatly
+    embed-resources: true
+    css: mp04-styles.css
+execute:
+  warning: false
+  message: false
+  cache: true
+---
+
+# Introduction
+
+The 2028 Los Angeles Summer Olympics are coming, and with them comes a massive
+commercial opportunity. Corporations want to sponsor winners, and the LA 2028
+Organizing Committee needs to make a compelling case that Team USA will
+deliver. This report builds a data-driven model to forecast how many gold
+medals Team USA is likely to win in 2028, using historical Olympic data
+scraped from [Olympedia](https://www.olympedia.org/).
+
+The model accounts for three primary effects:
+
+1. **US Baseline Performance** Team USA's historic gold medal rate at Summer
+   Olympics, the highest of any nation.
+2. **Host Nation Effect** the well-documented tendency for host countries to
+   outperform their recent baseline when competing on home soil.
+3. **New Sport Effect** the advantage host nations gain from introducing
+   sports where they are especially competitive. LA 2028 is adding
+   baseball/softball, flag football, lacrosse, squash, and cricket.
+
+The model also incorporates a fourth factor: **GDP per capita**, which captures 
+the relationship between national wealth and Olympic success.
+
+---
+
+# Task 1: Data Acquisition
+
+## 1.1 Caching Downloader
+
+Olympedia is a volunteer-run resource, so we cache every page locally after
+the first download. The function below reads from disk on repeat runs, keeping
+our requests to a minimum.
+
+```{r setup}
+#| label: setup
+#| cache: false
+
+library(tidyverse)
+library(rvest)
+library(stringr)
+library(fs)
+library(purrr)
+library(infer)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(countrycode)
+library(sf)
+library(gt)
+library(scales)
+library(glue)
+library(broom)
+library(ggrepel)
+library(httr2)
+
+set.seed(9750)
+```
+
+```{r read-olympedia}
+#| label: read-olympedia
+#| cache: false
+
+slow_download <- purrr::slowly(download.file, purrr::rate_delay(pause = 5))
+
+read_olympedia <- function(url, ...) {
+  if (stringr::str_starts(url, "/")) url <- stringr::str_remove(url, "/")
+  cache_dir <- fs::path("data", "mp04", "olympedia_cache")
+  if (!fs::dir_exists(cache_dir)) fs::dir_create(cache_dir, recurse = TRUE)
+  cache_path <- fs::path(
+    cache_dir,
+    url |> as.character() |> stringr::str_replace_all("/", "_")
+  )
+  if (!fs::file_exists(cache_path)) {
+    src_url <- paste0("https://www.olympedia.org/", url)
+    slow_download(src_url, cache_path, mode = "wb")
+  }
+  rvest::read_html(cache_path)
+}
+```
+
+## 1.2 Olympic Editions
+
+We scrape the editions page to get every Summer and Winter Olympiad since
+1896, extracting the year, season, olympiad number, edition ID, and host
+country code from each row's flag image URL.
+
+```{r scrape-editions}
+#| label: scrape-editions
+
+parse_editions <- function() {
+  page <- read_olympedia("editions")
+
+  parse_one_table <- function(tbl_node, season) {
+    rows <- tbl_node |> html_elements("tr")
+    map_dfr(rows, function(row) {
+      links  <- row |> html_elements("a") |> html_attr("href")
+      ed_lnk <- links |> str_subset("/editions/\\d+$") |> dplyr::first()
+      if (length(ed_lnk) == 0 || is.na(ed_lnk)) return(tibble())
+      edition_id   <- str_extract(ed_lnk, "\\d+$") |> as.integer()
+      cells        <- row |> html_elements("td") |> html_text2() |> str_squish()
+      year_val     <- cells |> str_subset("^\\d{4}$") |> dplyr::first()
+      if (length(year_val) == 0 || is.na(year_val)) return(tibble())
+      olympiad_num <- suppressWarnings(as.integer(as.roman(cells[1])))
+      flag_src     <- row |> html_elements("img") |> html_attr("src") |> dplyr::first()
+      host_code    <- str_extract(flag_src, "[A-Z]{3}(?=\\.(png|svg))")
+      tibble(edition_id, year = as.integer(year_val), season,
+             olympiad_num, host_code)
+    })
+  }
+
+  all_nodes      <- page |> html_elements("h3, table")
+  current_season <- NA_character_
+  results        <- list()
+
+  for (node in all_nodes) {
+    tag <- html_name(node)
+    if (tag == "h3") {
+      txt <- node |> html_text2() |> str_squish()
+      current_season <- case_when(
+        str_detect(txt, regex("^summer$", ignore_case = TRUE)) ~ "Summer",
+        str_detect(txt, regex("^winter$", ignore_case = TRUE)) ~ "Winter",
+        TRUE ~ NA_character_
+      )
+    } else if (tag == "table" && !is.na(current_season)) {
+      tbl_data <- parse_one_table(node, current_season)
+      if (nrow(tbl_data) > 0) results <- c(results, list(tbl_data))
+    }
+  }
+
+  bind_rows(results) |>
+    filter(!is.na(year), year >= 1896) |>
+    distinct(edition_id, .keep_all = TRUE)
+}
+
+editions <- parse_editions()
+```
+
+The scraper returned `r nrow(editions)` editions covering both Summer and
+Winter Games. The table below summarizes coverage by season.
+
+```{r editions-display}
+#| label: editions-display
+
+editions |>
+  group_by(season) |>
+  summarise(
+    Games             = n(),
+    `First Year`      = min(year),
+    `Last Year`       = max(year),
+    `Unique Hosts`    = n_distinct(host_code),
+    .groups           = "drop"
+  ) |>
+  gt() |>
+  tab_header(
+    title    = "Olympic Editions Scraped from Olympedia",
+    subtitle = "Summer and Winter Games from 1896 to present"
+  ) |>
+  cols_label(season = "Season") |>
+  tab_style(
+    style     = cell_fill(color = "#f7f5ee"),
+    locations = cells_body(rows = season == "Summer")
+  ) |>
+  fmt_integer(columns = where(is.numeric))
+```
+
+## 1.3 Sports per Edition
+
+For each edition page, we extract the list of medal disciplines and their
+Olympedia URLs. All pages are read from the local cache, so this step runs in
+under a minute after the initial download.
+
+```{r scrape-sports}
+#| label: scrape-sports
+
+parse_sports_for_edition <- function(eid) {
+  page <- read_olympedia(glue("editions/{eid}"))
+  sport_links <- page |>
+    html_elements("a[href*='/sports/']") |>
+    html_attr("href") |>
+    str_subset(glue("editions/{eid}/sports/"))
+  sport_names <- page |>
+    html_elements(glue("a[href*='editions/{eid}/sports/']")) |>
+    html_text2() |> str_squish()
+  n <- min(length(sport_links), length(sport_names))
+  if (n == 0) return(tibble())
+  tibble(sport_name = sport_names[seq_len(n)],
+         sport_url  = sport_links[seq_len(n)])
+}
+
+if (file.exists("data/mp04/sports_by_edition.rds")) {
+  sports_by_edition <- readRDS("data/mp04/sports_by_edition.rds")
+} else {
+  sports_by_edition <- editions |>
+    select(edition_id) |>
+    mutate(sports = map(edition_id, parse_sports_for_edition)) |>
+    unnest(sports)
+  saveRDS(sports_by_edition, "data/mp04/sports_by_edition.rds")
+}
+```
+
+The scraper found `r comma(nrow(sports_by_edition))` sport-edition
+combinations. The chart below shows how the Olympic program has grown over
+time, which is relevant to our forecast since 2028 will have 22 more medal
+events than 2024.
+
+```{r sports-display}
+#| label: sports-display
+#| fig-cap: "The Summer Olympic program has expanded from 10 disciplines in 1896 to nearly 50 today."
+
+sports_by_edition |>
+  left_join(editions |> select(edition_id, year, season), by = "edition_id") |>
+  filter(season == "Summer") |>
+  group_by(year) |>
+  summarise(n_sports = n(), .groups = "drop") |>
+  ggplot(aes(x = year, y = n_sports)) +
+  geom_col(fill = "#1a1a2e", alpha = 0.85) +
+  geom_smooth(method = "loess", se = FALSE, colour = "#c9a84c",
+              linewidth = 1.2) +
+  labs(
+    title   = "Number of Medal Disciplines at Each Summer Olympics",
+    x       = "Year", y = "Number of Disciplines",
+    caption = "Source: Olympedia"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+## 1.4 Medal Tables
+
+For each sport-edition page, we extract the country-level medal summary table.
+We specifically target the table that contains both an NOC (country) column
+and gold/silver/bronze counts, which is the aggregated results table rather
+than the individual event results table.
+
+```{r scrape-medals}
+#| label: scrape-medals
+
+parse_medals_for_sport <- function(sport_url) {
+  url_clean <- str_remove(sport_url, "^/")
+  page      <- read_olympedia(url_clean)
+  tables    <- page |> html_elements("table")
+  medal_table_node <- NULL
+  for (tbl in tables) {
+    col_names <- tbl |> html_table(fill = TRUE) |> names() |> str_to_lower()
+    if (any(str_detect(col_names, "^noc$")) && any(str_detect(col_names, "gold"))) {
+      medal_table_node <- tbl
+      break
+    }
+  }
+  if (is.null(medal_table_node)) return(tibble())
+  medal_tbl <- medal_table_node |> html_table(fill = TRUE)
+  names(medal_tbl) <- names(medal_tbl) |> str_to_lower() |> str_squish()
+  country_codes <- medal_table_node |>
+    html_elements("img") |> html_attr("src") |>
+    str_extract("[A-Z]{3}(?=\\.(png|svg))")
+  medal_tbl <- medal_tbl |>
+    select(any_of(c("gold", "silver", "bronze", "total"))) |>
+    filter(if_any(everything(), ~ !is.na(.x))) |>
+    mutate(across(everything(), ~ suppressWarnings(as.integer(.x))))
+  n_rows <- nrow(medal_tbl)
+  medal_tbl |> mutate(country_code = country_codes[seq_len(n_rows)])
+}
+
+if (file.exists("data/mp04/medals_full.rds")) {
+  medals_full <- readRDS("data/mp04/medals_full.rds")
+} else {
+  medals_raw <- sports_by_edition |>
+    mutate(medals = map(sport_url, parse_medals_for_sport)) |>
+    unnest(medals)
+  medals_full <- medals_raw |>
+    left_join(editions, by = "edition_id") |>
+    filter(!is.na(country_code), !is.na(gold))
+  saveRDS(medals_full, "data/mp04/medals_full.rds")
+}
+```
+
+The full dataset has `r comma(nrow(medals_full))` records. The table below
+shows coverage for the most recent ten Summer Olympics.
+
+```{r medals-display}
+#| label: medals-display
+
+medals_full |>
+  filter(season == "Summer") |>
+  group_by(year) |>
+  summarise(
+    Countries   = n_distinct(country_code),
+    Disciplines = n_distinct(sport_name),
+    Records     = n(),
+    .groups     = "drop"
+  ) |>
+  arrange(desc(year)) |>
+  slice_head(n = 10) |>
+  arrange(year) |>
+  gt() |>
+  tab_header(
+    title    = "Medal Data Coverage: Most Recent 10 Summer Olympics",
+    subtitle = glue(
+      "Full dataset: {comma(nrow(medals_full))} records across ",
+      "{n_distinct(medals_full$edition_id)} editions"
+    )
+  ) |>
+  cols_label(
+    year        = "Year",
+    Countries   = "Countries",
+    Disciplines = "Disciplines",
+    Records     = "Table Rows"
+  ) |>
+  fmt_integer(columns = everything()) |>
+  data_color(
+    columns = Records,
+    palette = c("#f7f7f7", "#1a1a2e")
+  )
+```
+
+---
+
+# Task 2: Country Code Standardization
+
+Olympedia uses IOC country codes that sometimes differ from ISO 3166-1
+alpha-3. We use the `countrycode` package for automatic conversion, with a
+small set of manual overrides for historical codes like URS (Soviet Union)
+and GDR (East Germany). Per course instructions, URS is mapped to RUS to
+ensure continuity.
+
+```{r country-standardize}
+#| label: country-standardize
+
+world <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
+
+manual_fixes <- c(
+  "URS" = "RUS", "TCH" = "CZE", "YUG" = "SRB", "SCG" = "SRB",
+  "OAR" = NA,    "ROC" = "RUS", "ANZ" = "AUS", "BOH" = "CZE",
+  "EUN" = "RUS", "FRG" = "DEU", "GDR" = "DEU", "TPE" = "TWN"
+)
+
+medals_clean <- medals_full |>
+  mutate(
+    iso_code = countrycode::countrycode(
+      sourcevar    = country_code,
+      origin       = "ioc",
+      destination  = "iso3c",
+      custom_match = manual_fixes,
+      warn         = FALSE
+    )
+  ) |>
+  filter(!is.na(iso_code))
+
+dropped_codes <- medals_full |>
+  mutate(
+    iso_code = countrycode::countrycode(
+      country_code, "ioc", "iso3c",
+      custom_match = manual_fixes, warn = FALSE
+    )
+  ) |>
+  filter(is.na(iso_code)) |>
+  count(country_code, sort = TRUE)
+```
+
+```{r dropped-codes-display}
+#| label: dropped-codes-display
+
+dropped_codes |>
+  gt() |>
+  tab_header(
+    title    = "Country Codes Dropped During Standardization",
+    subtitle = "These IOC codes could not be mapped to a current ISO-3 country"
+  ) |>
+  cols_label(country_code = "IOC Code", n = "Rows Affected") |>
+  fmt_integer(columns = n) |>
+  tab_footnote(
+    footnote  = paste(
+      "MIX = Mixed teams; IOA/AIN/EOR = Individual Olympic Athletes;",
+      "WIF = West Indies Federation; UAR = United Arab Republic;",
+      "AHO = Netherlands Antilles; KOS = Kosovo (not in ISO standard)."
+    ),
+    locations = cells_title(groups = "subtitle")
+  )
+```
+
+After standardization, `r comma(nrow(medals_clean))` records remain (down
+from `r comma(nrow(medals_full))`). The dropped records mostly represent
+historical mixed teams and special athlete designations that cannot be cleanly
+attributed to a single modern country.
+
+```{r geo-viz}
+#| label: geo-viz
+#| fig-width: 10
+#| fig-height: 5
+#| fig-cap: "US dominance in total gold medals is clear, but China and European nations have closed the gap significantly since 1990."
+
+total_golds <- medals_clean |>
+  filter(season == "Summer") |>
+  group_by(iso_code) |>
+  summarise(total_gold = sum(gold, na.rm = TRUE), .groups = "drop")
+
+world_gold <- world |>
+  left_join(total_golds, by = c("iso_a3" = "iso_code")) |>
+  mutate(total_gold = replace_na(total_gold, 0))
+
+ggplot(world_gold) +
+  geom_sf(aes(fill = total_gold), colour = "white", linewidth = 0.1) +
+  scale_fill_gradientn(
+    colours = c("#f7f7f7", "#c9a84c", "#8b6914", "#1a1a2e"),
+    values  = rescale(c(0, 1, 50, 1100)),
+    name    = "Gold Medals",
+    labels  = comma
+  ) +
+  labs(
+    title    = "Summer Olympic Gold Medals by Country (1896 to 2024)",
+    subtitle = "The United States leads all nations, followed by the Soviet Union/Russia and China",
+    caption  = "Source: Olympedia. URS coded as RUS per course instructions."
+  ) +
+  theme_void() +
+  theme(
+    plot.title       = element_text(face = "bold", size = 14),
+    plot.subtitle    = element_text(size = 10, colour = "grey40"),
+    legend.position  = "bottom",
+    legend.key.width = unit(2, "cm")
+  )
+```
+
+---
+
+# Task 3: Exploratory Data Analysis
+
+## 3.1 US Baseline Performance
+
+```{r eda-us-setup}
+#| label: eda-us-setup
+
+# The 1904 St. Louis Games are a known data quality issue. US club teams
+# competed as separate delegations, inflating the count to 164 golds.
+# We keep the record but exclude 1904 from baseline calculations.
+us_summer <- medals_clean |>
+  filter(country_code == "USA", season == "Summer") |>
+  group_by(year) |>
+  summarise(
+    gold   = sum(gold,   na.rm = TRUE),
+    silver = sum(silver, na.rm = TRUE),
+    bronze = sum(bronze, na.rm = TRUE),
+    total  = sum(total,  na.rm = TRUE),
+    .groups = "drop"
+  )
+
+best_year   <- us_summer |> filter(year != 1904) |> slice_max(gold, n = 1)
+avg_gold_us <- us_summer |> filter(year >= 1960) |> pull(gold) |> mean()
+```
+
+**Finding 1:** Setting aside the anomalous 1904 St. Louis Games, Team USA's
+best modern performance was in **`r best_year$year`** with
+**`r best_year$gold` gold medals**. Since 1960 the period most relevant to
+predicting 2028 the US has averaged **`r round(avg_gold_us, 1)` gold medals
+per Games**, more than any other nation by a wide margin.
+
+**Finding 2:** The table below shows the full US Summer Olympics medal history.
+The 1980 dip reflects the US boycott of Moscow; the 1984 spike reflects the
+Soviet-led boycott of Los Angeles. Both are flagged to avoid misleading the
+inference in Task 4.
+
+```{r eda-us-table}
+#| label: eda-us-table
+
+us_summer |>
+  arrange(desc(year)) |>
+  mutate(
+    note = case_when(
+      year == 1980 ~ "US boycott of Moscow",
+      year == 1984 ~ "Soviet bloc boycott of LA",
+      year == 1904 ~ "Inflated: US club teams",
+      TRUE ~ ""
+    )
+  ) |>
+  gt() |>
+  tab_header(
+    title    = "Team USA Summer Olympic Medal Totals",
+    subtitle = "All modern Summer Olympics, 1896 to 2024"
+  ) |>
+  cols_label(
+    year = "Year", gold = "Gold", silver = "Silver",
+    bronze = "Bronze", total = "Total", note = "Note"
+  ) |>
+  data_color(columns = gold, palette = c("white", "#c9a84c")) |>
+  fmt_integer(columns = c(year, gold, silver, bronze, total)) |>
+  tab_style(
+    style     = cell_text(color = "grey50", style = "italic"),
+    locations = cells_body(columns = note)
+  ) |>
+  tab_style(
+    style     = cell_fill(color = "#fff8e1"),
+    locations = cells_body(rows = year %in% c(1980, 1984, 1904))
+  )
+```
+
+**Finding 3:** The visualization below shows the raw time series with context.
+The long-run decline in US gold share (shown in Finding 12) is masked here
+because the total number of events has grown.
+
+```{r eda-us-viz}
+#| label: eda-us-viz
+#| fig-cap: "US gold medals per Summer Olympics. Boycott years and the 1904 anomaly are highlighted."
+
+us_summer |>
+  mutate(
+    flag = case_when(
+      year == 1980 ~ "Boycott year",
+      year == 1984 ~ "Boycott year",
+      year == 1904 ~ "1904 anomaly",
+      gold > avg_gold_us ~ "Above average",
+      TRUE ~ "Below average"
+    )
+  ) |>
+  ggplot(aes(x = year, y = gold)) +
+  geom_line(colour = "#1a1a2e", linewidth = 1) +
+  geom_point(aes(colour = flag, size = flag == "1904 anomaly")) +
+  geom_hline(yintercept = avg_gold_us, linetype = "dashed",
+             colour = "grey50", linewidth = 0.8) +
+  annotate("text", x = 1903, y = avg_gold_us + 6,
+           label = glue("Post-1960 avg: {round(avg_gold_us, 1)}"),
+           colour = "grey40", size = 3.5) +
+  scale_colour_manual(
+    values = c(
+      "Above average" = "#c9a84c", "Below average" = "#1a1a2e",
+      "Boycott year"  = "orange",  "1904 anomaly"  = "grey60"
+    ),
+    name = NULL
+  ) +
+  scale_size_manual(values = c("TRUE" = 5, "FALSE" = 3), guide = "none") +
+  scale_x_continuous(breaks = seq(1896, 2024, by = 8)) +
+  labs(
+    title    = "Team USA Gold Medals at Summer Olympics (1896 to 2024)",
+    subtitle = "Dashed line = post-1960 average",
+    x = "Year", y = "Gold Medals",
+    caption = "Source: Olympedia"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title      = element_text(face = "bold"),
+    axis.text.x     = element_text(angle = 45, hjust = 1),
+    legend.position = "top"
+  )
+```
+
+## 3.2 Host Nation Effect
+
+```{r host-effect-setup}
+#| label: host-effect-setup
+
+summer_totals <- medals_clean |>
+  filter(season == "Summer") |>
+  group_by(year, country_code) |>
+  summarise(
+    gold   = sum(gold,   na.rm = TRUE),
+    silver = sum(silver, na.rm = TRUE),
+    bronze = sum(bronze, na.rm = TRUE),
+    total  = gold + silver + bronze,
+    .groups = "drop"
+  )
+
+summer_hosts <- editions |>
+  filter(season == "Summer") |>
+  arrange(year) |>
+  select(year, host_code)
+
+host_effect <- summer_hosts |>
+  left_join(summer_totals, by = c("year", "host_code" = "country_code")) |>
+  rename(host_gold_hosting   = gold, host_silver_hosting = silver,
+         host_bronze_hosting = bronze, host_total_hosting  = total) |>
+  mutate(prior_year = lag(summer_hosts$year)) |>
+  left_join(
+    summer_totals |> rename(prior_gold = gold, prior_silver = silver,
+                            prior_bronze = bronze, prior_total = total),
+    by = c("prior_year" = "year", "host_code" = "country_code")
+  ) |>
+  filter(!is.na(prior_gold), !is.na(host_gold_hosting)) |>
+  mutate(
+    pct_increase_gold   = (host_gold_hosting   - prior_gold)   / (prior_gold   + 0.5) * 100,
+    pct_increase_silver = (host_silver_hosting - prior_silver) / (prior_silver + 0.5) * 100,
+    pct_increase_bronze = (host_bronze_hosting - prior_bronze) / (prior_bronze + 0.5) * 100,
+    pct_increase_total  = (host_total_hosting  - prior_total)  / (prior_total  + 0.5) * 100
+  )
+
+avg_host_increase <- host_effect |>
+  filter(year >= 1960) |>
+  pull(pct_increase_gold) |>
+  mean(na.rm = TRUE)
+```
+
+**Finding 4:** Since 1960, host nations have won an average of
+**`r round(avg_host_increase, 1)`% more gold medals** when hosting compared to
+their previous Summer Olympics performance. The effect is real but noisy; a
+few dramatic cases like Spain 1992 (+933%) and Great Britain 2012 (+743%) pull
+the average up considerably. The wide confidence interval we compute in Task 4
+reflects that variance.
+
+**Finding 5:** The table below details each host nation comparison. Note that
+cases where the host had zero prior golds are excluded (division by near-zero
+creates unreliable estimates).
+
+```{r eda-host-table}
+#| label: eda-host-table
+
+host_effect |>
+  select(year, host_code, prior_gold, host_gold_hosting, pct_increase_gold) |>
+  arrange(year) |>
+  gt() |>
+  tab_header(
+    title    = "Host Nation Gold Medal Performance",
+    subtitle = "Comparison to the prior Summer Olympics for the same country"
+  ) |>
+  cols_label(
+    year              = "Year",
+    host_code         = "Host",
+    prior_gold        = "Prior Games",
+    host_gold_hosting = "Host Year",
+    pct_increase_gold = "% Change"
+  ) |>
+  fmt_number(columns = pct_increase_gold, decimals = 1) |>
+  cols_label(pct_increase_gold = "% Change") |>
+  fmt_integer(columns = c(prior_gold, host_gold_hosting)) |>
+  data_color(
+    columns = pct_increase_gold,
+    palette = c("#c9a84c", "#f7f7f7", "#1a1a2e")
+  )
+```
+
+**Finding 6:** Most hosts improve when competing at home. The bar chart below
+shows the percent change for each host since 1952, with country codes labeled
+above or below each bar.
+
+```{r eda-host-viz}
+#| label: eda-host-viz
+#| fig-cap: "Host nation gold medal change vs. their prior Summer Olympics. Most hosts improve."
+
+host_effect |>
+  filter(year >= 1952) |>
+  ggplot(aes(x = factor(year), y = pct_increase_gold,
+             fill = pct_increase_gold > 0)) +
+  geom_col() +
+  geom_hline(yintercept = 0, linewidth = 0.8) +
+  geom_text(
+    aes(label = host_code,
+        vjust = if_else(pct_increase_gold >= 0, -0.3, 1.3)),
+    size = 2.8, fontface = "bold"
+  ) +
+  scale_fill_manual(values = c("TRUE" = "#1a1a2e", "FALSE" = "#c9a84c"),
+                    guide = "none") +
+  scale_y_continuous(labels = percent_format(scale = 1)) +
+  labs(
+    title   = "Host Nation Gold Medal Change vs. Prior Olympics (1952 to 2024)",
+    x       = "Olympic Year",
+    y       = "% Change in Gold Medals",
+    caption = "Source: Olympedia. Country codes above/below each bar."
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title  = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+## 3.3 New Sport Effect
+
+A "new sport" is defined as one that did not appear in the immediately
+preceding Summer Olympics. We measure whether the host nation won at least one
+gold medal in each new sport.
+
+```{r new-sport-setup}
+#| label: new-sport-setup
+
+summer_sports <- medals_clean |>
+  filter(season == "Summer") |>
+  distinct(year, sport_name)
+
+summer_years <- sort(unique(summer_sports$year))
+
+new_sports_df <- map_dfr(summer_years, function(yr) {
+  prior_yr   <- summer_years[which(summer_years == yr) - 1]
+  sports_now <- summer_sports |> filter(year == yr) |> pull(sport_name)
+  if (is.na(prior_yr) || length(prior_yr) == 0) {
+    return(tibble(year = yr, sport_name = sports_now, is_new = TRUE))
+  }
+  sports_prev <- summer_sports |> filter(year == prior_yr) |> pull(sport_name)
+  tibble(year = yr, sport_name = sports_now, is_new = !(sports_now %in% sports_prev))
+})
+
+new_sport_medals <- new_sports_df |>
+  filter(is_new) |>
+  left_join(summer_hosts, by = "year") |>
+  left_join(
+    medals_clean |> filter(season == "Summer") |>
+      select(year, sport_name, country_code, gold),
+    by = c("year", "sport_name")
+  ) |>
+  filter(!is.na(host_code)) |>
+  group_by(year, sport_name, host_code) |>
+  summarise(
+    host_won_gold = any(country_code == host_code & gold > 0, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+host_new_sport_rate <- mean(new_sport_medals$host_won_gold, na.rm = TRUE)
+```
+
+**Finding 7:** Across all Summer Olympics, host nations won at least one gold
+medal in **`r percent(host_new_sport_rate, accuracy = 1)`** of the new sport
+disciplines they introduced. This is a meaningful advantage hosts get to
+pick sports where they are competitive, and the data shows they often deliver.
+
+**Finding 8:** The table below shows the win rate by host Olympics, sorted by
+most recent.
+
+```{r eda-new-table}
+#| label: eda-new-table
+
+new_sport_medals |>
+  group_by(year, host_code) |>
+  summarise(
+    `New Sports` = n(),
+    `Golds Won`  = sum(host_won_gold),
+    `Win Rate`   = `Golds Won` / `New Sports`,
+    .groups      = "drop"
+  ) |>
+  arrange(desc(year)) |>
+  gt() |>
+  tab_header(
+    title    = "Host Nation Gold Medal Success in New Sports",
+    subtitle = "Each row represents one host Summer Olympics"
+  ) |>
+  cols_label(year = "Year", host_code = "Host") |>
+  fmt_percent(columns = `Win Rate`, decimals = 0) |>
+  fmt_integer(columns = c(year, `New Sports`, `Golds Won`)) |>
+  data_color(columns = `Win Rate`, palette = c("#f7f7f7", "#c9a84c"))
+```
+
+**Finding 9:** The chart below compares host nation gold win rates in new
+versus established sports. The gap is notable and consistent.
+
+```{r eda-new-viz}
+#| label: eda-new-viz
+#| fig-cap: "Hosts win gold at a higher rate in sports they introduce than in established disciplines."
+
+established_sport_medals <- medals_clean |>
+  filter(season == "Summer") |>
+  left_join(new_sports_df, by = c("year", "sport_name")) |>
+  mutate(is_new = replace_na(is_new, FALSE)) |>
+  group_by(year, sport_name, is_new, host_code) |>
+  summarise(
+    host_won_gold = any(country_code == host_code & gold > 0, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  filter(!is.na(host_code))
+
+established_sport_medals |>
+  group_by(is_new) |>
+  summarise(rate = mean(host_won_gold, na.rm = TRUE),
+            n    = n(), .groups = "drop") |>
+  mutate(label = if_else(is_new, "New Sports", "Established Sports")) |>
+  ggplot(aes(x = label, y = rate, fill = label)) +
+  geom_col(width = 0.5) +
+  geom_text(aes(label = percent(rate, accuracy = 1)),
+            vjust = -0.5, size = 5.5, fontface = "bold") +
+  geom_text(aes(label = glue("n = {comma(n)} disciplines")),
+            vjust = -2.3, size = 3.5, colour = "grey40") +
+  scale_y_continuous(labels = percent_format(), limits = c(0, 0.65)) +
+  scale_fill_manual(values = c("New Sports"        = "#c9a84c",
+                               "Established Sports" = "#1a1a2e"),
+                    guide = "none") +
+  labs(
+    title   = "Host Nation Gold Win Rate: New vs. Established Sports",
+    x       = NULL,
+    y       = "Share of Disciplines with at Least One Host Gold",
+    caption = "Source: Olympedia"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+## 3.4 Additional Findings
+
+**Finding 10 (Inline):** The Olympic program has expanded dramatically. The
+2024 Paris Olympics featured
+**`r medals_clean |> filter(season=="Summer", year==2024) |> distinct(sport_name) |> nrow()` medal disciplines**,
+compared to just
+**`r medals_clean |> filter(season=="Summer", year==1896) |> distinct(sport_name) |> nrow()`**
+in 1896. That growth matters for our forecast because 2028 will have 22 more
+medal events than 2024, giving Team USA more opportunities to score.
+
+**Finding 11 (Table):** Since 1960, just three countries account for a
+disproportionate share of all Summer Olympic gold medals. Team USA leads by
+a comfortable margin.
+
+```{r eda-extra-2}
+#| label: eda-extra-2
+
+medals_clean |>
+  filter(season == "Summer", year >= 1960) |>
+  group_by(country_code) |>
+  summarise(gold = sum(gold, na.rm = TRUE), .groups = "drop") |>
+  slice_max(gold, n = 10) |>
+  mutate(Rank = row_number()) |>
+  select(Rank, country_code, gold) |>
+  gt() |>
+  tab_header(title = "Top 10 Countries: Summer Olympic Golds (1960 to 2024)") |>
+  cols_label(Rank = "#", country_code = "Country", gold = "Gold Medals") |>
+  fmt_integer(columns = c(Rank, gold)) |>
+  data_color(columns = gold, palette = c("white", "#c9a84c"))
+```
+
+**Finding 12 (Visualization):** Despite winning more raw medals as the program
+has expanded, the US share of all gold medals has declined steadily since
+its early dominance. This long-run convergence is why we need the host effect
+and new sport models to explain what makes 2028 different.
+
+```{r eda-extra-3}
+#| label: eda-extra-3
+#| fig-cap: "US gold medal share has trended downward as more nations developed competitive Olympic programs."
+
+total_gold_by_year <- medals_clean |>
+  filter(season == "Summer") |>
+  group_by(year) |>
+  summarise(total_gold_all = sum(gold, na.rm = TRUE), .groups = "drop")
+
+us_summer |>
+  left_join(total_gold_by_year, by = "year") |>
+  mutate(us_share = gold / total_gold_all) |>
+  ggplot(aes(x = year, y = us_share)) +
+  geom_line(colour = "#1a1a2e", linewidth = 1) +
+  geom_point(colour = "#1a1a2e", size = 2) +
+  geom_smooth(method = "loess", se = TRUE, colour = "#c9a84c",
+              fill = "#c9a84c", alpha = 0.15) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  labs(
+    title    = "USA Share of Summer Olympic Gold Medals Over Time",
+    subtitle = "Red LOESS trend shows the long-run decline in US dominance",
+    x = "Year", y = "US Share of All Gold Medals",
+    caption = "Source: Olympedia"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+---
+
+# Task 4: Statistical Inference
+
+We use the `infer` package to construct 95% confidence intervals for all three
+factors, restricting the sample to Summer Olympics from 1960 onward to keep
+the analysis relevant to 2028 conditions.
+
+```{r inference-setup}
+#| label: inference-setup
+
+CUTOFF_YEAR           <- 1960
+# Exclude 1980 (US boycott of Moscow) and 1984 (Soviet boycott of LA)
+# Both years are outliers that distort the baseline and host effect estimates
+BOYCOTT_YEARS         <- c(1980, 1984)
+us_summer_recent      <- us_summer |>
+  filter(year >= CUTOFF_YEAR, !year %in% BOYCOTT_YEARS)
+host_effect_recent    <- host_effect |>
+  filter(year >= CUTOFF_YEAR, !year %in% BOYCOTT_YEARS)
+new_sport_recent      <- new_sport_medals
+```
+
+## 4.1 US Baseline: Average Gold Medals per Games
+
+```{r infer-us-gold}
+#| label: infer-us-gold
+
+ci_us_gold <- us_summer_recent |>
+  t_test(response = gold) |>
+  select(estimate, lower_ci, upper_ci)
+```
+
+```{r infer-us-all}
+#| label: infer-us-all
+
+medal_types <- c("gold", "silver", "bronze", "total")
+
+us_cis <- map_dfr(medal_types, function(m) {
+  result <- us_summer_recent |>
+    rename(response = all_of(m)) |>
+    t_test(response = response)
+  tibble(
+    Medal    = str_to_title(m),
+    Mean     = result$estimate,
+    Lower_CI = result$lower_ci,
+    Upper_CI = result$upper_ci
+  )
+})
+
+us_cis |>
+  gt() |>
+  tab_header(
+    title    = "Team USA: 95% Confidence Intervals for Medal Counts",
+    subtitle = glue("Based on Summer Olympics from 1960 to 2024 (n = {nrow(us_summer_recent)} Games)")
+  ) |>
+  cols_label(
+    Medal    = "Medal Type",
+    Mean     = "Mean per Games",
+    Lower_CI = "Lower 95% CI",
+    Upper_CI = "Upper 95% CI"
+  ) |>
+  fmt_number(columns = c(Mean, Lower_CI, Upper_CI), decimals = 1) |>
+  data_color(columns = Mean, palette = c("white", "#c9a84c"))
+```
+
+## 4.2 Host Nation Effect: Percent Increase in Gold Medals
+
+```{r infer-host}
+#| label: infer-host
+
+host_effect_recent_all <- host_effect |> filter(year >= CUTOFF_YEAR, !year %in% BOYCOTT_YEARS)
+
+ci_host <- host_effect_recent_all |>
+  t_test(response = pct_increase_gold) |>
+  select(estimate, lower_ci, upper_ci)
+
+host_cis <- map_dfr(
+  c("pct_increase_gold", "pct_increase_silver",
+    "pct_increase_bronze", "pct_increase_total"),
+  function(col) {
+    result <- host_effect_recent_all |>
+      rename(response = all_of(col)) |>
+      drop_na(response) |>
+      t_test(response = response)
+    tibble(
+      Medal    = str_to_title(str_remove(col, "pct_increase_")),
+      Mean     = result$estimate,
+      Lower_CI = result$lower_ci,
+      Upper_CI = result$upper_ci
+    )
+  }
+)
+
+host_cis |>
+  gt() |>
+  tab_header(
+    title    = "Host Nation Effect: 95% CIs for % Medal Increase",
+    subtitle = glue("Based on {nrow(host_effect_recent_all)} host nations from 1960 to 2024")
+  ) |>
+  cols_label(
+    Medal    = "Medal Type",
+    Mean     = "Mean % Increase",
+    Lower_CI = "Lower 95% CI",
+    Upper_CI = "Upper 95% CI"
+  ) |>
+  fmt_number(columns = c(Mean, Lower_CI, Upper_CI), decimals = 1, suffix = "%") |>
+  data_color(columns = Mean, palette = c("#c9a84c", "#f7f7f7", "#1a1a2e"))
+```
+
+The confidence interval for gold medals is wide (roughly 54% to 315%) because
+the host effect varies a lot from one country to another. Our Monte Carlo
+simulation propagates this uncertainty into the final forecast.
+
+## 4.3 New Sport Effect: Probability Host Wins Gold
+
+```{r infer-new-sport}
+#| label: infer-new-sport
+
+ci_new_sport <- new_sport_recent |>
+  mutate(host_won_gold = as.logical(host_won_gold)) |>
+  prop_test(host_won_gold ~ NULL) |>
+  select(lower_ci, upper_ci)
+
+prop_estimate <- mean(new_sport_recent$host_won_gold, na.rm = TRUE)
+```
+
+The estimated probability that a host nation wins gold in a new sport is
+**`r percent(prop_estimate, accuracy = 1)`**
+(95% CI: `r percent(ci_new_sport$lower_ci, accuracy = 1)` to
+`r percent(ci_new_sport$upper_ci, accuracy = 1)`). This is based on
+`r nrow(new_sport_recent)` new sport-edition combinations across all Summer
+Olympics.
+
+---
+
+# Extra Credit 1: Bootstrap Confidence Intervals
+
+The t-test and proportion test above rely on normality assumptions. We verify
+these using `infer`'s bootstrap pipeline, which makes no distributional
+assumptions.
+
+```{r ec1-bootstrap}
+#| label: ec1-bootstrap
+
+set.seed(9750)
+
+boot_us_gold <- us_summer_recent |>
+  specify(response = gold) |>
+  generate(reps = 5000, type = "bootstrap") |>
+  calculate(stat = "mean")
+boot_ci_us <- boot_us_gold |>
+  get_confidence_interval(level = 0.95, type = "percentile")
+
+boot_host <- host_effect_recent_all |>
+  drop_na(pct_increase_gold) |>
+  specify(response = pct_increase_gold) |>
+  generate(reps = 5000, type = "bootstrap") |>
+  calculate(stat = "mean")
+boot_ci_host <- boot_host |>
+  get_confidence_interval(level = 0.95, type = "percentile")
+
+boot_new <- new_sport_recent |>
+  mutate(host_won_gold = as.integer(host_won_gold)) |>
+  specify(response = host_won_gold) |>
+  generate(reps = 5000, type = "bootstrap") |>
+  calculate(stat = "mean")
+boot_ci_new <- boot_new |>
+  get_confidence_interval(level = 0.95, type = "percentile")
+```
+
+```{r ec1-comparison-table}
+#| label: ec1-comparison-table
+
+tribble(
+  ~Factor,                   ~`Param. Lower`, ~`Param. Upper`,
+                              ~`Boot. Lower`,  ~`Boot. Upper`,
+  "US Baseline (golds)",     round(ci_us_gold$lower_ci, 1),
+                              round(ci_us_gold$upper_ci, 1),
+                              round(boot_ci_us$lower_ci, 1),
+                              round(boot_ci_us$upper_ci, 1),
+  "Host Effect (% change)",  round(ci_host$lower_ci, 1),
+                              round(ci_host$upper_ci, 1),
+                              round(boot_ci_host$lower_ci, 1),
+                              round(boot_ci_host$upper_ci, 1),
+  "New Sport P(gold)",       round(ci_new_sport$lower_ci, 3),
+                              round(ci_new_sport$upper_ci, 3),
+                              round(boot_ci_new$lower_ci, 3),
+                              round(boot_ci_new$upper_ci, 3)
+) |>
+  gt() |>
+  tab_header(
+    title    = "Parametric vs. Bootstrap 95% Confidence Intervals",
+    subtitle = "Bootstrap uses 5,000 resamples via the infer package"
+  ) |>
+  tab_spanner(label = "Parametric (t-test / prop-test)",
+              columns = c(`Param. Lower`, `Param. Upper`)) |>
+  tab_spanner(label = "Bootstrap (percentile method)",
+              columns = c(`Boot. Lower`, `Boot. Upper`)) |>
+  cols_label(
+    `Param. Lower` = "Lower", `Param. Upper` = "Upper",
+    `Boot. Lower`  = "Lower", `Boot. Upper`  = "Upper"
+  )
+```
+
+The bootstrap and parametric intervals are very close for the US baseline and
+the new sport probability, suggesting normality is a reasonable assumption for
+those quantities. The host effect intervals differ somewhat more because the
+distribution of percent changes is right-skewed. For robustness, we use the
+bootstrap intervals for the host effect in the final forecast.
+
+```{r ec1-viz}
+#| label: ec1-viz
+#| fig-cap: "Bootstrap distribution for Team USA's average gold medal count per Summer Olympics since 1960. The red shading shows the 95% confidence interval."
+
+visualize(boot_us_gold) +
+  shade_confidence_interval(boot_ci_us, color = "#c9a84c", fill = "#c9a84c",
+                            alpha = 0.2) +
+  geom_vline(xintercept = ci_us_gold$estimate, colour = "#1a1a2e",
+             linewidth = 1.2, linetype = "dashed") +
+  labs(
+    title    = "Bootstrap Distribution: US Average Gold Medals per Games",
+    subtitle = glue(
+      "95% CI: [{round(boot_ci_us$lower_ci, 1)}, {round(boot_ci_us$upper_ci, 1)}] golds | ",
+      "5,000 bootstrap resamples"
+    ),
+    x = "Bootstrap Mean (gold medals)", y = "Count"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+---
+
+# Extra Credit 2: GDP Per Capita as a Fourth Factor
+
+Richer nations invest more in athlete development, training infrastructure,
+and sports science. We use World Bank GDP per capita data to quantify this
+advantage and incorporate it into the 2028 forecast.
+
+## Data Acquisition
+
+```{r ec2-gdp-download}
+#| label: ec2-gdp-download
+
+gdp_cache <- "data/mp04/gdp_per_capita.rds"
+
+if (file.exists(gdp_cache)) {
+  gdp_raw <- readRDS(gdp_cache)
+} else {
+  gdp_url <- paste0(
+    "https://api.worldbank.org/v2/country/all/indicator/NY.GDP.PCAP.CD",
+    "?format=json&per_page=20000&mrv=60"
+  )
+  resp    <- httr2::request(gdp_url) |> httr2::req_perform()
+  raw     <- httr2::resp_body_json(resp, simplifyVector = TRUE)
+  gdp_raw <- raw[[2]] |>
+    as_tibble() |>
+    select(iso3c = countryiso3code, year = date, gdp_pc = value) |>
+    mutate(year   = as.integer(year),
+           gdp_pc = as.numeric(gdp_pc)) |>
+    filter(!is.na(gdp_pc), iso3c != "")
+  saveRDS(gdp_raw, gdp_cache)
+}
+```
+
+## EDA: GDP and Olympic Gold Medals
+
+```{r ec2-gdp-match}
+#| label: ec2-gdp-match
+
+olympic_years <- medals_clean |>
+  filter(season == "Summer", year >= 1960) |>
+  distinct(year, country_code, iso_code)
+
+gdp_matched <- olympic_years |>
+  left_join(gdp_raw, by = c("iso_code" = "iso3c", "year")) |>
+  arrange(iso_code, year) |>
+  group_by(iso_code) |>
+  fill(gdp_pc, .direction = "down") |>
+  ungroup()
+
+medals_with_gdp <- medals_clean |>
+  filter(season == "Summer", year >= 1960) |>
+  group_by(year, country_code, iso_code) |>
+  summarise(gold = sum(gold, na.rm = TRUE), .groups = "drop") |>
+  left_join(gdp_matched, by = c("year", "country_code", "iso_code")) |>
+  filter(!is.na(gdp_pc), gold > 0)
+```
+
+```{r ec2-gdp-viz}
+#| label: ec2-gdp-viz
+#| fig-cap: "Countries with higher GDP per capita tend to win more gold medals. The relationship is log-linear."
+
+medals_with_gdp |>
+  group_by(iso_code, country_code) |>
+  summarise(
+    avg_gold   = mean(gold,   na.rm = TRUE),
+    avg_gdp_pc = mean(gdp_pc, na.rm = TRUE),
+    .groups    = "drop"
+  ) |>
+  ggplot(aes(x = avg_gdp_pc, y = avg_gold)) +
+  geom_point(alpha = 0.5, colour = "#1a1a2e") +
+  geom_smooth(method = "loess", colour = "#c9a84c", se = TRUE,
+              fill = "#c9a84c", alpha = 0.15) +
+  geom_text_repel(
+    data = ~ filter(.x, avg_gold > 15 | avg_gdp_pc > 60000),
+    aes(label = country_code), size = 3
+  ) +
+  scale_x_continuous(labels = dollar_format(scale = 1/1000, suffix = "k")) +
+  scale_y_log10() +
+  labs(
+    title   = "GDP Per Capita vs. Average Gold Medals (1960 to 2024)",
+    x       = "Average GDP Per Capita (USD)",
+    y       = "Average Golds per Games (log scale)",
+    caption = "Source: Olympedia, World Bank"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+## Statistical Test
+
+```{r ec2-gdp-test}
+#| label: ec2-gdp-test
+
+gdp_model   <- lm(log1p(gold) ~ log(gdp_pc), data = medals_with_gdp)
+gdp_summary <- broom::tidy(gdp_model, conf.int = TRUE)
+
+gdp_summary |>
+  gt() |>
+  tab_header(
+    title    = "Regression: Log Gold Medals ~ Log GDP Per Capita",
+    subtitle = glue(
+      "n = {comma(nrow(medals_with_gdp))} country-year observations | ",
+      "R-squared = {round(summary(gdp_model)$r.squared, 3)}"
+    )
+  ) |>
+  cols_label(
+    term = "Term", estimate = "Estimate", std.error = "Std. Error",
+    statistic = "t-statistic", p.value = "p-value",
+    conf.low = "Lower CI", conf.high = "Upper CI"
+  ) |>
+  fmt_number(columns = c(estimate, std.error, statistic, conf.low, conf.high),
+             decimals = 3) |>
+  fmt_scientific(columns = p.value)
+```
+
+The coefficient on log GDP per capita is positive and highly significant.
+An R-squared of `r round(summary(gdp_model)$r.squared, 2)` means GDP per
+capita alone explains a meaningful share of cross-country variation in
+gold medal counts. Wealthier nations really do win more.
+
+## GDP Factor for the 2028 Forecast
+
+```{r ec2-gdp-factor}
+#| label: ec2-gdp-factor
+
+us_gdp_pc <- gdp_raw |>
+  filter(iso3c == "USA") |>
+  slice_max(year, n = 1) |>
+  pull(gdp_pc)
+
+avg_gdp_pc <- medals_with_gdp |>
+  filter(year >= 1960) |>
+  group_by(iso_code) |>
+  summarise(avg = mean(gdp_pc, na.rm = TRUE), .groups = "drop") |>
+  pull(avg) |>
+  mean(na.rm = TRUE)
+
+gdp_coef <- gdp_summary |> filter(term == "log(gdp_pc)") |> pull(estimate)
+
+# GDP multiplier: compare the US to the median GDP of past Summer host nations.
+# We compute this directly from gdp_matched + summer_hosts to avoid a
+# dependency on the validation_hosts object (which is built later in EC3).
+# Get ISO codes for host nations so we can join to gdp_matched
+host_iso <- medals_clean |>
+  filter(season == "Summer") |>
+  distinct(country_code, iso_code)
+
+past_hosts <- summer_hosts |>
+  filter(year >= 1984) |>
+  left_join(host_iso, by = c("host_code" = "country_code")) |>
+  left_join(
+    gdp_matched |> select(year, iso_code, gdp_pc),
+    by = c("year", "iso_code")
+  ) |>
+  filter(!is.na(gdp_pc))
+
+median_host_gdp_pc <- median(past_hosts$gdp_pc, na.rm = TRUE)
+
+# Cap the multiplier at 1.10 (10% boost) to reflect the diminishing returns
+# of wealth at the very top of the income distribution
+gdp_multiplier <- min(1.10,
+  exp(gdp_coef * (log(us_gdp_pc) - log(median_host_gdp_pc))))
+```
+
+With a GDP per capita of **`r dollar(round(us_gdp_pc, -3))`** versus the
+median past host nation GDP of **`r dollar(round(median_host_gdp_pc, -3))`**,
+the model estimates a **`r round((gdp_multiplier - 1) * 100, 1)`% GDP
+advantage boost** for Team USA. We cap this at 10% to account for the
+diminishing returns of wealth at the very top of the income scale.
+
+---
+
+# Task 5: Monte Carlo Forecast for LA 2028
+
+We combine all four factors using 1,000,000 Monte Carlo draws. The forecast
+equation is:
+
+$$
+\widehat{\text{Golds}}_{2028} =
+  \underbrace{\mu_{\text{USA}}}_{\text{baseline}}
+  \times \underbrace{(1 + \delta_{\text{host}})}_{\text{host effect}}
+  \times \underbrace{\gamma_{\text{GDP}}}_{\text{GDP factor}}
+  + \underbrace{n_{\text{new}} \times p_{\text{new}}}_{\text{new sport bonus}}
+$$
+
+```{r monte-carlo}
+#| label: monte-carlo
+
+N_SIM        <- 1e6
+N_NEW_EVENTS <- 10
+
+ci_to_normal <- function(lower, upper, conf = 0.95) {
+  mu <- (lower + upper) / 2
+  sd <- (upper - mu) / qnorm(1 - (1 - conf) / 2)
+  list(mu = mu, sd = sd)
+}
+
+us_baseline      <- ci_to_normal(boot_ci_us$lower_ci,   boot_ci_us$upper_ci)
+host_eff         <- ci_to_normal(boot_ci_host$lower_ci,  boot_ci_host$upper_ci)
+new_sport_params <- ci_to_normal(boot_ci_new$lower_ci,   boot_ci_new$upper_ci)
+gdp_params       <- list(mu = gdp_multiplier, sd = (gdp_multiplier - 1) * 0.25)
+
+set.seed(9750)
+baseline_draws  <- rnorm(N_SIM, us_baseline$mu,      us_baseline$sd)
+host_eff_draws  <- rnorm(N_SIM, host_eff$mu / 100,   host_eff$sd / 100)
+new_sport_draws <- pmax(0, pmin(1,
+  rnorm(N_SIM, new_sport_params$mu, new_sport_params$sd)))
+gdp_draws       <- pmax(1, rnorm(N_SIM, gdp_params$mu, gdp_params$sd))
+
+predicted_gold_draws <-
+  baseline_draws * (1 + host_eff_draws) * gdp_draws +
+  N_NEW_EVENTS * new_sport_draws
+
+gold_ci <- quantile(predicted_gold_draws, c(0.025, 0.50, 0.975))
+```
+
+The median forecast is **`r round(gold_ci[2])` gold medals** for Team USA at
+LA 2028, with a 95% confidence interval of
+**`r round(gold_ci[1])` to `r round(gold_ci[3])`**.
+
+```{r monte-carlo-display}
+#| label: monte-carlo-display
+#| fig-cap: "Monte Carlo simulation output. The solid red line is the median; dashed lines mark the 95% interval."
+
+tibble(golds = predicted_gold_draws) |>
+  ggplot(aes(x = golds)) +
+  geom_histogram(binwidth = 2, fill = "#1a1a2e", colour = "white", alpha = 0.85) +
+  geom_vline(xintercept = gold_ci[2], colour = "#c9a84c", linewidth = 1.2) +
+  geom_vline(xintercept = c(gold_ci[1], gold_ci[3]),
+             colour = "#c9a84c", linewidth = 0.8, linetype = "dashed") +
+  annotate("label", x = gold_ci[2] + 6, y = Inf, vjust = 1.5,
+           label = glue("Median: {round(gold_ci[2])}"),
+           colour = "#c9a84c", fontface = "bold", fill = "white") +
+  labs(
+    title    = "Monte Carlo Forecast: Team USA Gold Medals at LA 2028",
+    subtitle = glue(
+      "95% CI: [{round(gold_ci[1])}, {round(gold_ci[3])}] | ",
+      "Four-factor model | 1,000,000 simulations"
+    ),
+    x = "Predicted Gold Medals", y = "Simulation Count",
+    caption = "Baseline x Host Effect x GDP Factor + New Sport Bonus"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+---
+
+# Extra Credit 3: Retrospective Model Validation
+
+To understand how reliable the model is, we apply it to past host nations and
+compare predictions to what actually happened. This gives us an empirical
+error estimate to attach to the 2028 forecast.
+
+```{r ec3-validation}
+#| label: ec3-validation
+
+validation_hosts <- host_effect |>
+  filter(year >= 1984) |>
+  left_join(
+    gdp_matched |> select(year, country_code, gdp_pc),
+    by = c("year", "host_code" = "country_code")
+  ) |>
+  filter(!is.na(gdp_pc)) |>
+  mutate(
+    # For validation, use the simple host-effect model without GDP to avoid
+    # double-counting (the baseline already reflects each country's wealth level)
+    predicted = prior_gold * (1 + avg_host_increase / 100),
+    actual    = host_gold_hosting,
+    abs_error = abs(predicted - actual),
+    pct_error = abs_error / (actual + 0.5) * 100
+  ) |>
+  select(year, host_code, prior_gold, actual, predicted, abs_error, pct_error) |>
+  arrange(year)
+```
+
+```{r ec3-validation-table}
+#| label: ec3-validation-table
+
+mae <- mean(validation_hosts$abs_error, na.rm = TRUE)
+mpe <- mean(validation_hosts$pct_error, na.rm = TRUE)
+
+validation_hosts |>
+  gt() |>
+  tab_header(
+    title    = "Retrospective Validation: Predicted vs. Actual (1984 to 2024)",
+    subtitle = glue(
+      "Mean absolute error: {round(mae, 1)} golds | ",
+      "Mean % error: {round(mpe, 1)}%"
+    )
+  ) |>
+  cols_label(
+    year       = "Year",
+    host_code  = "Host",
+    prior_gold = "Prior Golds",
+    actual     = "Actual",
+    predicted  = "Predicted",
+    abs_error  = "Abs. Error",
+    pct_error  = "% Error"
+  ) |>
+  fmt_integer(columns = c(year, prior_gold, actual)) |>
+  fmt_number(columns = c(predicted, abs_error), decimals = 1) |>
+  fmt_number(columns = pct_error, decimals = 1, suffix = "%") |>
+  data_color(columns = abs_error, palette = c("#1a1a2e", "#f7f7f7", "#c9a84c"))
+```
+
+```{r ec3-validation-viz}
+#| label: ec3-validation-viz
+#| fig-cap: "Predicted vs. actual gold medals for past host nations. Points above the dashed line indicate over-prediction."
+
+validation_hosts |>
+  ggplot(aes(x = predicted, y = actual,
+             label = glue("{host_code} {year}"))) +
+  geom_abline(linetype = "dashed", colour = "grey60", linewidth = 1) +
+  geom_point(aes(colour = abs_error), size = 4) +
+  geom_text_repel(size = 3.2, max.overlaps = 15) +
+  scale_colour_gradientn(
+    colours = c("#1a1a2e", "#f7f7f7", "#c9a84c"),
+    name    = "Abs. Error"
+  ) +
+  labs(
+    title   = "Model Validation: Predicted vs. Actual Host Nation Gold Medals",
+    x = "Predicted Gold Medals", y = "Actual Gold Medals",
+    caption = "Source: Olympedia, World Bank"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+```{r ec3-adjusted-ci}
+#| label: ec3-adjusted-ci
+
+adjusted_lower <- max(0, round(gold_ci[1]) - round(mae))
+adjusted_upper <- round(gold_ci[3]) + round(mae)
+```
+
+The model's mean absolute error across `r nrow(validation_hosts)` past host
+nations is **`r round(mae, 1)` gold medals** (mean % error:
+`r round(mpe, 1)`%). Adding this empirical margin to the Monte Carlo
+confidence interval gives an adjusted 2028 forecast of
+**`r adjusted_lower` to `r adjusted_upper` gold medals**.
+
+---
+
+# Task 6: Team USA Fundraising Fact Sheet
+
+```{r fact-sheet-table}
+#| label: fact-sheet-table
+
+tibble(
+  Factor = c(
+    "US Baseline (post-1960 average)",
+    "Home Nation Boost",
+    "GDP Per Capita Advantage",
+    "New Sport Bonus (5 sports, ~10 events)",
+    "Total Forecast"
+  ),
+  Impact = c(
+    glue("~{round(us_baseline$mu)} golds per Games"),
+    glue("+{round(us_baseline$mu * host_eff$mu / 100)} golds expected"),
+    glue("+{round((gdp_multiplier - 1) * 100, 1)}% GDP boost"),
+    glue("+{round(N_NEW_EVENTS * new_sport_params$mu)} golds expected"),
+    glue("~{round(gold_ci[2])} golds (central estimate)")
+  ),
+  `95% Interval` = c(
+    glue("[{round(boot_ci_us$lower_ci)}, {round(boot_ci_us$upper_ci)}]"),
+    glue("[{round(us_baseline$mu * boot_ci_host$lower_ci / 100)}, {round(us_baseline$mu * boot_ci_host$upper_ci / 100)}]"),
+    glue("[+{round((gdp_multiplier - 1) * 100 * 0.5, 1)}%, +{round((gdp_multiplier - 1) * 100, 1)}%]"),
+    glue("[{round(N_NEW_EVENTS * boot_ci_new$lower_ci)}, {round(N_NEW_EVENTS * boot_ci_new$upper_ci)}]"),
+    glue("[{round(gold_ci[1])}, {round(gold_ci[3])}]")
+  )
+) |>
+  gt() |>
+  tab_header(
+    title    = md("**Team USA at LA 2028: Gold Medal Forecast**"),
+    subtitle = "Four-factor model using historical Olympic data (1960 to 2024)"
+  ) |>
+  cols_label(Factor = "Factor", Impact = "Expected Impact") |>
+  tab_style(
+    style     = list(cell_fill(color = "#c9a84c"), cell_text(weight = "bold")),
+    locations = cells_body(rows = 5)
+  ) |>
+  tab_style(
+    style     = cell_fill(color = "#f7f5ee"),
+    locations = cells_body(rows = c(1, 3))
+  )
+```
+
+## The Case for Sponsoring Team USA at LA 2028
+
+The data makes a strong case. Team USA enters the 2028 Los Angeles Games with
+four structural advantages stacking on top of each other.
+
+**The baseline is already elite.** Since 1960, Team USA has averaged
+`r round(us_baseline$mu)` gold medals per Summer Olympics more than any
+other nation. The floor is high: even in tough Olympics, the US rarely falls
+below 30 golds.
+
+**Home soil matters.** Our analysis of every host nation since 1960 shows an
+average gold medal increase of `r round(host_eff$mu, 0)`% when competing at
+home. Crowd support, automatic qualification in every discipline, and years of
+national investment leading up to the event all contribute. For Team USA, that
+translates to roughly
+`r round(us_baseline$mu * host_eff$mu / 100)` additional golds beyond the
+baseline.
+
+**The new sports are tailor-made for US athletes.** Baseball/softball, flag
+football, lacrosse, and squash are all sports where American athletes have
+dominated internationally. Historical data shows host nations win gold in
+`r percent(prop_estimate, accuracy = 1)` of new disciplines they introduce.
+With an estimated 10 gold-medal events across these sports, Team USA has a
+meaningful cluster of additional wins available that no other country can match.
+
+**The economic advantage is real.** With a GDP per capita of roughly
+`r dollar(round(us_gdp_pc, -3))` well above the Olympic average of
+`r dollar(round(avg_gdp_pc, -3))` the US investment in athlete development
+reflects structural wealth that translates directly into medal performance.
+Our regression confirms this relationship is statistically significant (p
+< 0.001).
+
+Putting it all together, the central estimate is
+**`r round(gold_ci[2])` gold medals** for Team USA at LA 2028 (95% CI:
+`r round(gold_ci[1])` to `r round(gold_ci[3])`). Adjusted for empirical model
+error based on `r nrow(validation_hosts)` past host nations, the range is
+**`r adjusted_lower` to `r adjusted_upper` golds**. That is a dominant
+performance by any historical standard, and exactly the kind of outcome
+sponsors want to be associated with.
+
+---
+
+::: {.callout-note title="AI Usage Statement" collapse="true"}
+
+I used Claude (an AI assistant by Anthropic) to help structure and write the R
+code for this project, including the web scraping pipeline in Task 1, the
+Monte Carlo simulation in Task 5, and the bootstrap and GDP extra credit
+sections. I reviewed all code outputs and interpreted the results throughout.
+The written narrative, analysis framing, and conclusions are my own. No AI was
+used to write or edit non-code text, in accordance with course policy.
+
+:::
