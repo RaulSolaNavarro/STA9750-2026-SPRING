@@ -7,7 +7,6 @@ author:
   - name: Evelyn Rodriguez
   - name: Raúl J. Solá Navarro
 date: "2026-05-21"
-page-layout: full
 format:
   html:
     fig-align: center
