@@ -9,6 +9,8 @@ author:
 date: "2026-05-21"
 format:
   html:
+    title-block-banner: true
+    title-block-banner-color: "#F5C518"
     toc: true
     toc-depth: 2
     toc-title: "Contents"
