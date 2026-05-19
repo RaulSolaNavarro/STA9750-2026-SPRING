@@ -102,7 +102,7 @@ ul.task-list li input[type="checkbox"] {
   .quarto-title-banner .title {
     color: var(--brand-gold) !important;
     font-family: "Helvetica Neue", Arial, sans-serif !important;
-    font-size: 2rem !important;
+    font-size: 4rem !important;
     font-weight: 700 !important;
     border-bottom: 2px solid var(--brand-gold);
     padding-bottom: 0.3rem;
@@ -284,15 +284,10 @@ ul.task-list li input[type="checkbox"] {
       width: 100%;
       height: auto;
     }
-    .quarto-title-banner,
-    .quarto-title-meta,
-    main#quarto-document-content {
-      margin-left: 0 !important;
-    }
-  }
-
-  main#quarto-document-content {
-    max-width: 1350px !important;
+    .quarto-title-banner .title,
+  .quarto-title h1.title,
+  h1.title {
+    font-size: 6rem !important;
   }
 </style>
 <script>
@@ -365,11 +360,7 @@ ul.task-list li input[type="checkbox"] {
     if (titleEl) {
       var img = document.createElement("img");
       img.src = "https://raulsolanavarro.github.io/STA9750-2026-SPRING/figures/nyc311_logo.png";
-      img.style.height = "2.2rem";
-      img.style.width = "auto";
-      img.style.verticalAlign = "middle";
-      img.style.marginRight = "0.6rem";
-      img.style.marginBottom = "0.2rem";
+      img.setAttribute("style", "height: 6rem !important; width: auto !important; vertical-align: middle; margin-right: 0.6rem; margin-bottom: 0.2rem;");
       titleEl.prepend(img);
     }
   });
