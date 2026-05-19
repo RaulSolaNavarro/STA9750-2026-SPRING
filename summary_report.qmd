@@ -46,7 +46,6 @@ format:
             padding: 0;
           }
 
-          /* ── Title banner ── */
           .quarto-title-banner,
           .navbar {
             background-color: var(--brand-dark) !important;
@@ -75,20 +74,18 @@ format:
             margin-top: 0.3rem !important;
           }
 
-          /* ── Main layout grid ── */
           #quarto-content {
             display: grid !important;
             grid-template-columns: var(--toc-width) 1fr !important;
-            grid-template-areas: "sidebar main" !important;
             max-width: calc(var(--toc-width) + var(--content-max)) !important;
             margin: 0 auto !important;
             padding: 0 !important;
             gap: 0 !important;
           }
 
-          /* ── TOC sidebar ── */
           #TOC {
-            grid-area: sidebar !important;
+            grid-column: 1 !important;
+            grid-row: 1 / 999 !important;
             background-color: var(--brand-dark) !important;
             padding: 1.5rem 1rem !important;
             min-height: 100vh !important;
@@ -123,24 +120,21 @@ format:
             font-weight: 700 !important;
           }
 
-          /* ── Main content area ── */
           #quarto-document-content,
-          main.content {
-            grid-area: main !important;
+          main.content,
+          .quarto-title-meta {
+            grid-column: 2 !important;
             padding: 2rem 2.5rem !important;
             max-width: var(--content-max) !important;
           }
 
-          /* ── Author/date block ── */
           .quarto-title-meta {
             display: grid !important;
             grid-template-columns: 1fr 1fr !important;
             gap: 1rem !important;
-            padding: 1.5rem 2rem !important;
             background-color: var(--brand-light) !important;
           }
 
-          /* ── Section headings ── */
           h1, h2 {
             color: var(--brand-dark);
             font-family: "Helvetica Neue", "Arial", sans-serif;
@@ -157,7 +151,6 @@ format:
             margin-top: 1.6rem;
           }
 
-          /* ── Gold callout boxes ── */
           .callout-gold {
             background-color: var(--brand-gold);
             color: var(--brand-dark);
@@ -170,7 +163,6 @@ format:
             font-size: 1.02rem;
           }
 
-          /* ── Links ── */
           a {
             color: var(--brand-accent);
             text-decoration: none;
@@ -181,7 +173,6 @@ format:
             text-decoration: underline;
           }
 
-          /* ── Tables ── */
           table {
             font-size: 0.92rem;
             border-collapse: collapse;
@@ -203,7 +194,6 @@ format:
             border: 1px solid #ccc;
           }
 
-          /* ── Report link cards ── */
           .report-link-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -229,7 +219,6 @@ format:
             color: #ffffff;
           }
 
-          /* ── Footer ── */
           .data-footer {
             font-size: 0.82rem;
             color: #666;
@@ -238,7 +227,6 @@ format:
             padding-top: 0.8rem;
           }
 
-          /* ── Figures ── */
           img {
             max-width: 100% !important;
             height: auto !important;
