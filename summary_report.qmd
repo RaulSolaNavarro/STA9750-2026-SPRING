@@ -296,7 +296,7 @@ format:
 
 <script>
   document.addEventListener("DOMContentLoaded", function() {
-    var titleEl = document.querySelector(".quarto-title-banner .title");
+    var titleEl = document.querySelector(".quarto-title .title");
     if (titleEl) {
       var img = document.createElement("img");
       img.src = "https://raulsolanavarro.github.io/STA9750-2026-SPRING/figures/nyc311_logo.png";
