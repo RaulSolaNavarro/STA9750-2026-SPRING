@@ -42,31 +42,22 @@ ul.task-list li input[type="checkbox"] {
 <link href="summary_report_files/libs/bootstrap/bootstrap-db9071724a0ec8d7f037c025321719cb.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <style>html{ scroll-behavior: smooth; }</style>
 <style>
-
-      .quarto-title-block .quarto-title-banner h1,
-      .quarto-title-block .quarto-title-banner h2,
-      .quarto-title-block .quarto-title-banner h3,
-      .quarto-title-block .quarto-title-banner h4,
-      .quarto-title-block .quarto-title-banner h5,
-      .quarto-title-block .quarto-title-banner h6
-      {
-        color: #F5C518;
-      }
-
-      .quarto-title-block .quarto-title-banner {
-        color: #F5C518;
-      }
-</style>
-<style>
   :root {
     --brand-gold:   #F5C518;
     --brand-dark:   #1a1a1a;
     --brand-mid:    #2e2e2e;
     --brand-light:  #f9f6ee;
     --brand-accent: #c9a800;
-    --toc-width:    240px;
-    --content-max:  860px;
+    --toc-width:    200px;
   }
+
+  main#quarto-document-content {
+    margin-left: var(--toc-width) !important;
+    width: auto !important;
+    padding: 2rem 2.5rem !important;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
 
   body {
     background-color: var(--brand-light);
@@ -78,93 +69,116 @@ ul.task-list li input[type="checkbox"] {
     padding: 0;
   }
 
-  .quarto-title-banner,
-  .navbar {
-    background-color: var(--brand-dark) !important;
-    color: var(--brand-gold) !important;
+  #quarto-sidebar,
+  #quarto-toc-toggle,
+  .quarto-secondary-nav,
+  nav.quarto-page-breadcrumbs {
+    display: none !important;
   }
 
-  .quarto-title-banner .title,
-  .quarto-title-banner .subtitle,
-  .quarto-title-banner .quarto-title-meta-contents,
-  .quarto-title-banner .quarto-title-meta-heading {
-    color: var(--brand-gold) !important;
+  .page-layout-article,
+  .page-columns,
+  .page-rows-contents,
+  #quarto-content {
+    max-width: none !important;
+    width: 100% !important;
+    display: block !important;
+    grid-template-columns: none !important;
+  }
+
+  main#quarto-document-content {
+    margin-left: var(--toc-width) !important;
+    max-width: none !important;
+    width: auto !important;
+    padding: 2rem 2.5rem !important;
   }
 
   .quarto-title-banner {
-    padding-top: 1.2rem !important;
-    padding-bottom: 1.2rem !important;
-    padding-left: 2rem !important;
-  }
-
-  .quarto-title .title {
-    font-size: 2rem !important;
-  }
-
-  .quarto-title .subtitle {
-    font-size: 1rem !important;
-    margin-top: 0.3rem !important;
-  }
-
-  #quarto-content {
-    display: grid !important;
-    grid-template-columns: var(--toc-width) 1fr !important;
-    max-width: calc(var(--toc-width) + var(--content-max)) !important;
-    margin: 0 auto !important;
-    padding: 0 !important;
-    gap: 0 !important;
-  }
-
-  #TOC {
-    grid-column: 1 !important;
-    grid-row: 1 / 999 !important;
     background-color: var(--brand-dark) !important;
-    padding: 1.5rem 1rem !important;
-    min-height: 100vh !important;
-    position: sticky !important;
-    top: 0 !important;
-    align-self: start !important;
+    padding: 1.4rem 2rem !important;
+    margin-left: var(--toc-width) !important;
   }
 
-  #TOC ul {
-    list-style: none !important;
-    padding-left: 0 !important;
-    margin: 0 !important;
-  }
-
-  #TOC li {
-    margin: 0.4rem 0 !important;
-  }
-
-  #TOC a {
+  .quarto-title-banner .title {
     color: var(--brand-gold) !important;
-    text-decoration: none !important;
     font-family: "Helvetica Neue", Arial, sans-serif !important;
-    font-size: 0.88rem !important;
-  }
-
-  #TOC a:hover {
-    color: #ffffff !important;
-  }
-
-  #TOC .toc-active {
-    color: #ffffff !important;
+    font-size: 2rem !important;
     font-weight: 700 !important;
+    border-bottom: 2px solid var(--brand-gold);
+    padding-bottom: 0.3rem;
+    margin-bottom: 0.4rem;
   }
 
-  #quarto-document-content,
-  main.content,
-  .quarto-title-meta {
-    grid-column: 2 !important;
-    padding: 2rem 2.5rem !important;
-    max-width: var(--content-max) !important;
+  .quarto-title-banner .subtitle {
+    color: var(--brand-gold) !important;
+    font-family: "Helvetica Neue", Arial, sans-serif !important;
+    font-size: 1rem !important;
+    font-weight: 400 !important;
+    opacity: 0.9;
   }
 
   .quarto-title-meta {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 1rem !important;
+    display: flex !important;
+    gap: 3rem !important;
+    padding: 1rem 2rem !important;
     background-color: var(--brand-light) !important;
+    border-bottom: 1px solid #ddd;
+    flex-wrap: wrap;
+    margin-left: var(--toc-width) !important;
+    max-width: none !important;
+    width: auto !important;
+  }
+
+  .quarto-title-meta-heading {
+    font-family: "Helvetica Neue", Arial, sans-serif !important;
+    font-size: 0.72rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+    color: #888 !important;
+    margin-bottom: 0.3rem !important;
+  }
+
+  .quarto-title-meta-contents {
+    font-size: 0.95rem !important;
+    line-height: 1.6 !important;
+  }
+
+  #custom-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: var(--toc-width);
+    height: 100vh;
+    background-color: var(--brand-dark);
+    overflow-y: auto;
+    z-index: 1000;
+    padding: 1.5rem 1rem;
+  }
+
+  #custom-toc .toc-heading {
+    color: #888;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0 0 0.8rem 0;
+    border-bottom: 1px solid #333;
+    padding-bottom: 0.4rem;
+  }
+
+  #custom-toc a {
+    display: block;
+    color: var(--brand-gold) !important;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    padding: 0.3rem 0;
+    text-decoration: none !important;
+    border-bottom: none !important;
+  }
+
+  #custom-toc a:hover {
+    color: #ffffff !important;
   }
 
   h1, h2 {
@@ -243,12 +257,12 @@ ul.task-list li input[type="checkbox"] {
   }
 
   .report-link-card a {
-    color: var(--brand-gold);
+    color: var(--brand-gold) !important;
     font-weight: 700;
   }
 
   .report-link-card a:hover {
-    color: #ffffff;
+    color: #ffffff !important;
   }
 
   .data-footer {
@@ -263,70 +277,107 @@ ul.task-list li input[type="checkbox"] {
     max-width: 100% !important;
     height: auto !important;
   }
+
+  @media (max-width: 768px) {
+    #custom-sidebar {
+      position: relative;
+      width: 100%;
+      height: auto;
+    }
+    .quarto-title-banner,
+    .quarto-title-meta,
+    main#quarto-document-content {
+      margin-left: 0 !important;
+    }
+  }
+
+  main#quarto-document-content {
+    max-width: 1350px !important;
+  }
 </style>
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    var sidebar = document.createElement("div");
+    sidebar.id = "custom-sidebar";
+    sidebar.innerHTML = `
+      <div id="custom-toc">
+        <p class="toc-heading">Contents</p>
+        <a href="#why-311-matters">Why 311 Matters</a>
+        <a href="#prior-work-and-the-gap-this-project-fills">Prior Work and the Gap</a>
+        <a href="#data-sources-and-their-limitations">Data Sources and Limitations</a>
+        <a href="#findings">Findings</a>
+        <a href="#integrating-the-four-analyses">Integrating the Four Analyses</a>
+        <a href="#directions-for-future-work">Directions for Future Work</a>
+        <a href="#individual-technical-reports">Individual Technical Reports</a>
+        <a href="#data-sources">Data Sources</a>
+      </div>`;
+    document.body.prepend(sidebar);
+  });
+</script>
 
 
 </head>
 
-<body class="quarto-light">
+<body class="fullcontent quarto-light">
 
-<header id="title-block-header" class="quarto-title-block default toc-left page-columns page-full">
-  <div class="quarto-title-banner page-columns page-full">
-    <div class="quarto-title column-page-right">
-      <h1 class="title">311 Response and Resolution</h1>
-            <p class="subtitle lead">What Factors Drive NYC 311 Service Request Resolution Times, and Do They Suggest Segmented Prioritization of Issues?</p>
-                      </div>
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">311 Response and Resolution</h1>
+<p class="subtitle lead">What Factors Drive NYC 311 Service Request Resolution Times, and Do They Suggest Segmented Prioritization of Issues?</p>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Authors</div>
+    <div class="quarto-title-meta-contents">
+             <p>Xiyao (Jackie) Chen </p>
+             <p>Mary Lycke </p>
+             <p>Evelyn Rodriguez </p>
+             <p>Raúl J. Solá Navarro </p>
+          </div>
   </div>
     
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">May 21, 2026</p>
+    </div>
+  </div>
   
-  <div class="quarto-title-meta column-page-right">
-
-      <div>
-      <div class="quarto-title-meta-heading">Authors</div>
-      <div class="quarto-title-meta-contents">
-               <p>Xiyao (Jackie) Chen </p>
-               <p>Mary Lycke </p>
-               <p>Evelyn Rodriguez </p>
-               <p>Raúl J. Solá Navarro </p>
-            </div>
-    </div>
-      
-      <div>
-      <div class="quarto-title-meta-heading">Published</div>
-      <div class="quarto-title-meta-contents">
-        <p class="date">May 21, 2026</p>
-      </div>
-    </div>
     
-      
-    </div>
-    
+  </div>
   
-  </header><div id="quarto-content" class="page-columns page-rows-contents page-layout-full toc-left">
-<div id="quarto-sidebar-toc-left" class="sidebar toc-left">
-  <nav id="TOC" role="doc-toc" class="toc-active">
-    <h2 id="toc-title">Contents</h2>
-   
-  <ul class="collapse">
-  <li><a href="#why-311-matters" id="toc-why-311-matters" class="nav-link active" data-scroll-target="#why-311-matters">Why 311 Matters</a></li>
-  <li><a href="#prior-work-and-the-gap-this-project-fills" id="toc-prior-work-and-the-gap-this-project-fills" class="nav-link" data-scroll-target="#prior-work-and-the-gap-this-project-fills">Prior Work and the Gap This Project Fills</a></li>
-  <li><a href="#data-sources-and-their-limitations" id="toc-data-sources-and-their-limitations" class="nav-link" data-scroll-target="#data-sources-and-their-limitations">Data Sources and Their Limitations</a></li>
-  <li><a href="#findings" id="toc-findings" class="nav-link" data-scroll-target="#findings">Findings</a></li>
-  <li><a href="#integrating-the-four-analyses" id="toc-integrating-the-four-analyses" class="nav-link" data-scroll-target="#integrating-the-four-analyses">Integrating the Four Analyses</a></li>
-  <li><a href="#directions-for-future-work" id="toc-directions-for-future-work" class="nav-link" data-scroll-target="#directions-for-future-work">Directions for Future Work</a></li>
-  <li><a href="#individual-technical-reports" id="toc-individual-technical-reports" class="nav-link" data-scroll-target="#individual-technical-reports">Individual Technical Reports</a></li>
-  <li><a href="#data-sources" id="toc-data-sources" class="nav-link" data-scroll-target="#data-sources">Data Sources</a></li>
-  </ul>
-</nav>
-</div>
-<div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
-</div>
-<main class="content quarto-banner-title-block column-page-right" id="quarto-document-content">
 
 
+</header>
 
 
-
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    var titleEl = document.querySelector(".quarto-title-banner .title");
+    if (titleEl) {
+      var img = document.createElement("img");
+      var isGitHub = window.location.hostname.includes("github.io");
+      img.src = isGitHub
+        ? "https://raulsolanavarro.github.io/STA9750-2026-SPRING/figures/nyc311_logo.png"
+        : "data:image/png;base64,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"
+;
+      img.style.height = "2.2rem";
+      img.style.width = "auto";
+      img.style.verticalAlign = "middle";
+      img.style.marginRight = "0.6rem";
+      img.style.marginBottom = "0.2rem";
+      titleEl.prepend(img);
+    }
+  });
+</script>
 <hr>
 <section id="why-311-matters" class="level2">
 <h2 class="anchored" data-anchor-id="why-311-matters">Why 311 Matters</h2>

@@ -9,20 +9,14 @@ author:
 date: "2026-05-21"
 format:
   html:
-    fig-align: center
-    title-block-banner: true
-    title-block-banner-color: "#F5C518"
-    toc: true
-    toc-location: left
-    toc-depth: 2
-    toc-title: "Contents"
+    toc: false
     theme: flatly
     highlight-style: github
     code-fold: true
     fig-cap-location: bottom
     number-sections: false
     smooth-scroll: true
-    page-layout: full
+    fig-align: center
     include-in-header:
       text: |
         <style>
@@ -32,9 +26,16 @@ format:
             --brand-mid:    #2e2e2e;
             --brand-light:  #f9f6ee;
             --brand-accent: #c9a800;
-            --toc-width:    240px;
-            --content-max:  860px;
+            --toc-width:    200px;
           }
+          
+          main#quarto-document-content {
+            margin-left: var(--toc-width) !important;
+            width: auto !important;
+            padding: 2rem 2.5rem !important;
+          }
+          
+          *, *::before, *::after { box-sizing: border-box; }
 
           body {
             background-color: var(--brand-light);
@@ -46,93 +47,116 @@ format:
             padding: 0;
           }
 
-          .quarto-title-banner,
-          .navbar {
-            background-color: var(--brand-dark) !important;
-            color: var(--brand-gold) !important;
+          #quarto-sidebar,
+          #quarto-toc-toggle,
+          .quarto-secondary-nav,
+          nav.quarto-page-breadcrumbs {
+            display: none !important;
           }
 
-          .quarto-title-banner .title,
-          .quarto-title-banner .subtitle,
-          .quarto-title-banner .quarto-title-meta-contents,
-          .quarto-title-banner .quarto-title-meta-heading {
-            color: var(--brand-gold) !important;
+          .page-layout-article,
+          .page-columns,
+          .page-rows-contents,
+          #quarto-content {
+            max-width: none !important;
+            width: 100% !important;
+            display: block !important;
+            grid-template-columns: none !important;
+          }
+
+          main#quarto-document-content {
+            margin-left: var(--toc-width) !important;
+            max-width: none !important;
+            width: auto !important;
+            padding: 2rem 2.5rem !important;
           }
 
           .quarto-title-banner {
-            padding-top: 1.2rem !important;
-            padding-bottom: 1.2rem !important;
-            padding-left: 2rem !important;
-          }
-
-          .quarto-title .title {
-            font-size: 2rem !important;
-          }
-
-          .quarto-title .subtitle {
-            font-size: 1rem !important;
-            margin-top: 0.3rem !important;
-          }
-
-          #quarto-content {
-            display: grid !important;
-            grid-template-columns: var(--toc-width) 1fr !important;
-            max-width: calc(var(--toc-width) + var(--content-max)) !important;
-            margin: 0 auto !important;
-            padding: 0 !important;
-            gap: 0 !important;
-          }
-
-          #TOC {
-            grid-column: 1 !important;
-            grid-row: 1 / 999 !important;
             background-color: var(--brand-dark) !important;
-            padding: 1.5rem 1rem !important;
-            min-height: 100vh !important;
-            position: sticky !important;
-            top: 0 !important;
-            align-self: start !important;
+            padding: 1.4rem 2rem !important;
+            margin-left: var(--toc-width) !important;
           }
 
-          #TOC ul {
-            list-style: none !important;
-            padding-left: 0 !important;
-            margin: 0 !important;
-          }
-
-          #TOC li {
-            margin: 0.4rem 0 !important;
-          }
-
-          #TOC a {
+          .quarto-title-banner .title {
             color: var(--brand-gold) !important;
-            text-decoration: none !important;
             font-family: "Helvetica Neue", Arial, sans-serif !important;
-            font-size: 0.88rem !important;
-          }
-
-          #TOC a:hover {
-            color: #ffffff !important;
-          }
-
-          #TOC .toc-active {
-            color: #ffffff !important;
+            font-size: 2rem !important;
             font-weight: 700 !important;
+            border-bottom: 2px solid var(--brand-gold);
+            padding-bottom: 0.3rem;
+            margin-bottom: 0.4rem;
           }
 
-          #quarto-document-content,
-          main.content,
-          .quarto-title-meta {
-            grid-column: 2 !important;
-            padding: 2rem 2.5rem !important;
-            max-width: var(--content-max) !important;
+          .quarto-title-banner .subtitle {
+            color: var(--brand-gold) !important;
+            font-family: "Helvetica Neue", Arial, sans-serif !important;
+            font-size: 1rem !important;
+            font-weight: 400 !important;
+            opacity: 0.9;
           }
 
           .quarto-title-meta {
-            display: grid !important;
-            grid-template-columns: 1fr 1fr !important;
-            gap: 1rem !important;
+            display: flex !important;
+            gap: 3rem !important;
+            padding: 1rem 2rem !important;
             background-color: var(--brand-light) !important;
+            border-bottom: 1px solid #ddd;
+            flex-wrap: wrap;
+            margin-left: var(--toc-width) !important;
+            max-width: none !important;
+            width: auto !important;
+          }
+
+          .quarto-title-meta-heading {
+            font-family: "Helvetica Neue", Arial, sans-serif !important;
+            font-size: 0.72rem !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.08em !important;
+            color: #888 !important;
+            margin-bottom: 0.3rem !important;
+          }
+
+          .quarto-title-meta-contents {
+            font-size: 0.95rem !important;
+            line-height: 1.6 !important;
+          }
+
+          #custom-sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: var(--toc-width);
+            height: 100vh;
+            background-color: var(--brand-dark);
+            overflow-y: auto;
+            z-index: 1000;
+            padding: 1.5rem 1rem;
+          }
+
+          #custom-toc .toc-heading {
+            color: #888;
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin: 0 0 0.8rem 0;
+            border-bottom: 1px solid #333;
+            padding-bottom: 0.4rem;
+          }
+
+          #custom-toc a {
+            display: block;
+            color: var(--brand-gold) !important;
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            padding: 0.3rem 0;
+            text-decoration: none !important;
+            border-bottom: none !important;
+          }
+
+          #custom-toc a:hover {
+            color: #ffffff !important;
           }
 
           h1, h2 {
@@ -211,12 +235,12 @@ format:
           }
 
           .report-link-card a {
-            color: var(--brand-gold);
+            color: var(--brand-gold) !important;
             font-weight: 700;
           }
 
           .report-link-card a:hover {
-            color: #ffffff;
+            color: #ffffff !important;
           }
 
           .data-footer {
@@ -231,8 +255,60 @@ format:
             max-width: 100% !important;
             height: auto !important;
           }
+
+          @media (max-width: 768px) {
+            #custom-sidebar {
+              position: relative;
+              width: 100%;
+              height: auto;
+            }
+            .quarto-title-banner,
+            .quarto-title-meta,
+            main#quarto-document-content {
+              margin-left: 0 !important;
+            }
+          }
+
+          main#quarto-document-content {
+            max-width: 1350px !important;
+          }
         </style>
+        <script>
+          document.addEventListener("DOMContentLoaded", function() {
+            var sidebar = document.createElement("div");
+            sidebar.id = "custom-sidebar";
+            sidebar.innerHTML = `
+              <div id="custom-toc">
+                <p class="toc-heading">Contents</p>
+                <a href="#why-311-matters">Why 311 Matters</a>
+                <a href="#prior-work-and-the-gap-this-project-fills">Prior Work and the Gap</a>
+                <a href="#data-sources-and-their-limitations">Data Sources and Limitations</a>
+                <a href="#findings">Findings</a>
+                <a href="#integrating-the-four-analyses">Integrating the Four Analyses</a>
+                <a href="#directions-for-future-work">Directions for Future Work</a>
+                <a href="#individual-technical-reports">Individual Technical Reports</a>
+                <a href="#data-sources">Data Sources</a>
+              </div>`;
+            document.body.prepend(sidebar);
+          });
+        </script>
 ---
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    var titleEl = document.querySelector(".quarto-title-banner .title");
+    if (titleEl) {
+      var img = document.createElement("img");
+      img.src = "https://raulsolanavarro.github.io/STA9750-2026-SPRING/figures/nyc311_logo.png";
+      img.style.height = "2.2rem";
+      img.style.width = "auto";
+      img.style.verticalAlign = "middle";
+      img.style.marginRight = "0.6rem";
+      img.style.marginBottom = "0.2rem";
+      titleEl.prepend(img);
+    }
+  });
+</script>
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
