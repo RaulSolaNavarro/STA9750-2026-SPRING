@@ -19,6 +19,7 @@ format:
     fig-align: center
     include-in-header:
       text: |
+        <link rel="icon" type="image/png" href="https://raulsolanavarro.github.io/STA9750-2026-SPRING/figures/nyc311_logo.png">
         <style>
           :root {
             --brand-gold:   #F5C518;
