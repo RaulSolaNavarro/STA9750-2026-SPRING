@@ -7,21 +7,22 @@ author:
   - name: Evelyn Rodriguez
   - name: Raúl J. Solá Navarro
 date: "2026-05-21"
+page-layout: full
 format:
   html:
+    fig-align: center
     title-block-banner: true
     title-block-banner-color: "#F5C518"
     toc: true
-    toc-depth: 2
-    toc-title: "Contents"
     toc-location: left
     theme: flatly
+    toc-depth: 2
+    toc-title: "Contents"
     highlight-style: github
     code-fold: true
     fig-cap-location: bottom
     number-sections: false
     smooth-scroll: true
-    fig-align: center
     include-in-header:
       text: |
         <style>
@@ -55,6 +56,21 @@ format:
           .quarto-title-banner .quarto-title-meta-contents,
           .quarto-title-banner .quarto-title-meta-heading {
             color: var(--brand-gold) !important;
+          }
+          
+          /* ── Reduce banner height ──────────────────────────────────────────────── */
+          .quarto-title-banner {
+            padding-top: 1.2rem !important;
+            padding-bottom: 1.2rem !important;
+          }
+
+          .quarto-title .title {
+            font-size: 2rem !important;
+          }
+
+          .quarto-title .subtitle {
+            font-size: 1rem !important;
+            margin-top: 0.3rem !important;
           }
 
           /* ── Section headings ──────────────────────────────────────────────── */
@@ -355,7 +371,7 @@ Xiyao (Jackie) Chen<br>
 ---
 
 ::: {.callout-note collapse="true"}
-🤖 **AI Usage Statement**
+## 🤖 AI Usage Statement
 
 Claude (Anthropic) was used to assist with the technical construction of this summary report, including Quarto document structure, CSS styling and branding, figure placement, and debugging rendering issues. Claude was also used to help identify a coherent framework for integrating the four individual analyses into a unified narrative. All prose, analysis, conclusions, and written content in this report are the original work of the project team. Claude was not used to write, edit, or generate any text appearing in the report body, nor was it used in any of the four individual technical reports.
 :::
