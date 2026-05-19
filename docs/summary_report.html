@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.27">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Xiyao (Jackie) Chen">
+<meta name="author" content="Mary Lycke">
+<meta name="author" content="Evelyn Rodriguez">
+<meta name="author" content="Raúl J. Solá Navarro">
+<meta name="dcterms.date" content="2026-05-21">
+
+<title>311 Response and Resolution – Data Analysis - Research Reports</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-8b4baf804e461d9b72633f0de59a0cac.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-e610dc33e8aff51f812876dc8f08b2ab.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<style>html{ scroll-behavior: smooth; }</style>
+<style>
+  /* ── Brand palette (matches presentation) ─────────────────────────── */
+  :root {
+    --brand-gold:   #F5C518;
+    --brand-dark:   #1a1a1a;
+    --brand-mid:    #2e2e2e;
+    --brand-light:  #f9f6ee;
+    --brand-accent: #c9a800;
+  }
+
+  /* ── Page background and base text ────────────────────────────────── */
+  body {
+    background-color: var(--brand-light);
+    color: var(--brand-dark);
+    font-family: "Georgia", serif;
+    font-size: 1.05rem;
+    line-height: 1.75;
+  }
+
+  /* ── Title banner ──────────────────────────────────────────────────── */
+  .quarto-title-banner,
+  .navbar {
+    background-color: var(--brand-dark) !important;
+    color: var(--brand-gold) !important;
+  }
+
+  .quarto-title-banner .title,
+  .quarto-title-banner .subtitle,
+  .quarto-title-banner .quarto-title-meta-contents,
+  .quarto-title-banner .quarto-title-meta-heading {
+    color: var(--brand-gold) !important;
+  }
+
+  /* ── Section headings ──────────────────────────────────────────────── */
+  h1, h2 {
+    color: var(--brand-dark);
+    font-family: "Helvetica Neue", "Arial", sans-serif;
+    font-weight: 700;
+    border-bottom: 3px solid var(--brand-gold);
+    padding-bottom: 0.3rem;
+    margin-top: 2.2rem;
+  }
+
+  h3 {
+    color: var(--brand-mid);
+    font-family: "Helvetica Neue", "Arial", sans-serif;
+    font-weight: 600;
+    margin-top: 1.6rem;
+  }
+
+  /* ── TOC sidebar ───────────────────────────────────────────────────── */
+  #quarto-sidebar {
+    background-color: var(--brand-dark);
+  }
+
+  .sidebar-navigation a,
+  nav.sidebar-navigation > ul li a {
+    color: var(--brand-gold) !important;
+  }
+
+  nav.sidebar-navigation > ul li a:hover {
+    color: #ffffff !important;
+  }
+
+  /* ── Gold callout boxes ────────────────────────────────────────────── */
+  .callout-gold {
+    background-color: var(--brand-gold);
+    color: var(--brand-dark);
+    border-left: 6px solid var(--brand-accent);
+    padding: 1rem 1.4rem;
+    border-radius: 4px;
+    margin: 1.8rem 0;
+    font-family: "Helvetica Neue", "Arial", sans-serif;
+    font-weight: 600;
+    font-size: 1.02rem;
+  }
+
+  /* ── Links ─────────────────────────────────────────────────────────── */
+  a {
+    color: var(--brand-accent);
+    text-decoration: none;
+  }
+  a:hover {
+    color: var(--brand-dark);
+    text-decoration: underline;
+  }
+
+  /* ── Tables ────────────────────────────────────────────────────────── */
+  table {
+    font-size: 0.92rem;
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1.2rem 0;
+  }
+  thead tr {
+    background-color: var(--brand-dark);
+    color: var(--brand-gold);
+  }
+  tbody tr:nth-child(even) {
+    background-color: #f0ede3;
+  }
+  td, th {
+    padding: 0.5rem 0.8rem;
+    border: 1px solid #ccc;
+  }
+
+  /* ── Report link cards at bottom ───────────────────────────────────── */
+  .report-link-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1.5rem 0;
+  }
+
+  .report-link-card {
+    background-color: var(--brand-dark);
+    color: var(--brand-gold);
+    padding: 1rem 1.2rem;
+    border-radius: 4px;
+    font-family: "Helvetica Neue", "Arial", sans-serif;
+    font-size: 0.95rem;
+  }
+
+  .report-link-card a {
+    color: var(--brand-gold);
+    font-weight: 700;
+  }
+
+  .report-link-card a:hover {
+    color: #ffffff;
+  }
+
+  /* ── Footer ────────────────────────────────────────────────────────── */
+  .data-footer {
+    font-size: 0.82rem;
+    color: #666;
+    margin-top: 2.5rem;
+    border-top: 1px solid #ccc;
+    padding-top: 0.8rem;
+  }
+</style>
+
+
+</head>
+
+<body class="floating nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">Data Analysis - Research Reports</span>
+    </a>
+  </div>
+        <div class="quarto-navbar-tools tools-end">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Contents</h2>
+   
+  <ul class="collapse">
+  <li><a href="#why-311-matters" id="toc-why-311-matters" class="nav-link active" data-scroll-target="#why-311-matters">Why 311 Matters</a></li>
+  <li><a href="#prior-work-and-the-gap-this-project-fills" id="toc-prior-work-and-the-gap-this-project-fills" class="nav-link" data-scroll-target="#prior-work-and-the-gap-this-project-fills">Prior Work and the Gap This Project Fills</a></li>
+  <li><a href="#data-sources-and-their-limitations" id="toc-data-sources-and-their-limitations" class="nav-link" data-scroll-target="#data-sources-and-their-limitations">Data Sources and Their Limitations</a></li>
+  <li><a href="#findings" id="toc-findings" class="nav-link" data-scroll-target="#findings">Findings</a></li>
+  <li><a href="#integrating-the-four-analyses" id="toc-integrating-the-four-analyses" class="nav-link" data-scroll-target="#integrating-the-four-analyses">Integrating the Four Analyses</a></li>
+  <li><a href="#directions-for-future-work" id="toc-directions-for-future-work" class="nav-link" data-scroll-target="#directions-for-future-work">Directions for Future Work</a></li>
+  <li><a href="#individual-technical-reports" id="toc-individual-technical-reports" class="nav-link" data-scroll-target="#individual-technical-reports">Individual Technical Reports</a></li>
+  <li><a href="#data-sources" id="toc-data-sources" class="nav-link" data-scroll-target="#data-sources">Data Sources</a></li>
+  </ul>
+</nav>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">311 Response and Resolution</h1>
+<p class="subtitle lead">What Factors Drive NYC 311 Service Request Resolution Times, and Do They Suggest Segmented Prioritization of Issues?</p>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Authors</div>
+    <div class="quarto-title-meta-contents">
+             <p>Xiyao (Jackie) Chen </p>
+             <p>Mary Lycke </p>
+             <p>Evelyn Rodriguez </p>
+             <p>Raúl J. Solá Navarro </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">May 21, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<hr>
+<section id="why-311-matters" class="level2">
+<h2 class="anchored" data-anchor-id="why-311-matters">Why 311 Matters</h2>
+<p>New York City’s 311 system receives three to four million service requests every year. Residents use it to report heating failures in January, noise complaints at midnight, potholes that have persisted through multiple winters, and housing conditions that no tenant should be expected to tolerate. In principle, 311 functions as an equalizer: a single platform connecting every resident to the city agency responsible for addressing their concern, regardless of borough, income level, or familiarity with city government.</p>
+<p>In practice, resolution times vary by orders of magnitude. Some complaints are closed within minutes. Others remain open for months. Whether that variation reflects the inherent complexity of different problem types, or something more structural about how the city allocates attention and resources across its population, is a question with material consequences for residents. It is also a question that can now be examined empirically, given the richness of the administrative data the city makes publicly available.</p>
+<p>This report summarizes the findings of a four-part analysis conducted as the capstone project for STA 9750 at Baruch College. The central question is: <strong>What factors drive 311 service request response and resolution times, and do they suggest segmented prioritization of issues?</strong> The four sub-analyses were designed to give a comprehensive account of that question: agency SLA compliance identifies whether formal accountability structures work; neighborhood income tests whether outcomes differ by socioeconomic context; weather examines how an uncontrollable external factor strains response capacity; and submission method addresses whether the technology through which residents engage the system affects how quickly they are served. Together, these four angles cover the institutional, demographic, environmental, and behavioral dimensions of service delivery. The dataset spans more than 13 million closed service requests from January 2022 through December 2025.</p>
+<hr>
+</section>
+<section id="prior-work-and-the-gap-this-project-fills" class="level2">
+<h2 class="anchored" data-anchor-id="prior-work-and-the-gap-this-project-fills">Prior Work and the Gap This Project Fills</h2>
+<p>The academic and policy literature on 311 service delivery is narrower than one might expect given the platform’s scale. The New York City Council published a review of agency responsiveness in 2018 that identified substantial variation across agencies but did not investigate the underlying causes. The city’s own 311 Reporting dashboards aggregate SLA compliance across all agencies as a single figure, which prevents identification of which agencies are performing well and which are not. The <em>State of NYC311</em> report, released in 2023 to mark the platform’s twentieth anniversary, observes that call volume rises during major weather events but does not quantify the effect of weather on resolution time in a systematic way. A Violation Watch analysis traces the lifecycle of a housing complaint through HPD’s workflow and discusses that agency’s SLA targets, but the scope is limited to one agency and one complaint category.</p>
+<p>This project contributes four distinct extensions to that literature. It applies more current data (2022 to 2025) than any prior work identified. It conducts a systematic comparison of actual resolution times against published SLA targets across all major agencies simultaneously. It examines income effects at the census tract level rather than the borough level, providing substantially greater geographic resolution. And it introduces weather as a quantitative variable with defined severity thresholds rather than a qualitative narrative. No prior published work is known to combine all four of these elements for NYC 311 data. Where prior work documented variation in 311 response times without explaining it, this project identifies complaint type as the structural mediator connecting income, weather, channel, and SLA coverage into a single coherent account.</p>
+<hr>
+</section>
+<section id="data-sources-and-their-limitations" class="level2">
+<h2 class="anchored" data-anchor-id="data-sources-and-their-limitations">Data Sources and Their Limitations</h2>
+<p>The primary dataset is the NYC Open Data 311 Service Requests file, which records each inbound request with its creation date, closure date, complaint type, responding agency, borough, and geographic coordinates. After filtering to closed requests with valid timestamps and reasonable resolution-time bounds, the working dataset contains between 12.6 and 13.5 million records depending on the specific analysis and filtering choices described in the individual reports.</p>
+<p>Three supplementary sources were joined to this base. The <strong>NYC Open Data 311 Service Level Agreements</strong> lookup table contains the response-time commitments each agency has published for each complaint type and serves as the benchmark for the compliance analysis. <strong>American Community Survey</strong> data, accessed via the <code>tidycensus</code> R package, provided median household income estimates at the census tract level for all five NYC boroughs from the 2019 to 2023 five-year estimates, covering 2,327 tracts. The <strong>Open-Meteo Historical Archive API</strong> supplied daily weather records for 16 geographic points distributed across the five boroughs, enabling classification of each day as Normal, Adverse, or Extreme along five weather dimensions.</p>
+<p>Several limitations apply across all four analyses and should inform how findings are interpreted. The “closed” status in the 311 dataset does not confirm that the underlying problem was resolved; agencies can close a ticket administratively. ACS income estimates reflect a five-year average anchored to 2023 and may not reflect more recent neighborhood change, and 5.8 percent of tracts carry missing income estimates while 11 percent have high margins of error. Weather data is daily and borough-scale, smoothing out both short-duration events and within-borough microclimate variation. Most significantly, the SLA coverage gap is not random: nearly 90 percent of the service requests that could not be matched to any published SLA target are HPD habitability complaints, including heat, hot water, and plumbing categories, which are among those most commonly filed by lower-income tenants. This structural gap is itself an important finding, discussed further in the SLA compliance section below.</p>
+<hr>
+</section>
+<section id="findings" class="level2">
+<h2 class="anchored" data-anchor-id="findings">Findings</h2>
+<section id="agency-sla-compliance-three-operational-regimes" class="level3">
+<h3 class="anchored" data-anchor-id="agency-sla-compliance-three-operational-regimes">Agency SLA Compliance: Three Operational Regimes</h3>
+<p>Mary Lycke’s analysis joined 13.5 million service requests to the SLA lookup table using a tiered matching strategy (four-key match on agency, complaint type, descriptor, and secondary descriptor, falling back to a three-key match where needed), and computed for each agency the ratio of actual median resolution time to published SLA target. The results organize agencies into three distinct groups.</p>
+<p>The <strong>Department of Transportation (DOT)</strong> and the <strong>Department of Sanitation (DSNY)</strong> are reliable performers. DOT’s median resolution time runs at approximately 37 percent of its SLA commitment, with an 85 percent compliance rate across 354,000 requests. DSNY resolves its typical request at 44 percent of its committed window, with a 70 percent compliance rate across 838,000 requests. The <strong>Department of Environmental Protection (DEP)</strong> resolves its median request slightly past its published target but maintains 64 percent compliance. These agencies demonstrate that consistent SLA performance is operationally achievable.</p>
+<p>A second group systematically misses commitments. The <strong>Department of Parks and Recreation (DPR)</strong> has a median resolution ratio of 3.3 times its SLA and a 34 percent compliance rate. The <strong>Taxi and Limousine Commission (TLC)</strong> runs at 4.0 times its SLA with 24 percent compliance. The <strong>Department of Education (DOE)</strong> and the <strong>Department of Homeless Services (DHS)</strong> show compliance rates of 37 and 21 percent respectively. These patterns are consistent across years and complaint types within each agency, suggesting operational rather than incidental failures.</p>
+<p>Four agencies exhibit measurement irregularities that prevent meaningful evaluation. <strong>NYPD</strong>, the largest agency by volume at 6.04 million tickets, records 94 percent SLA compliance with a median resolution time under one hour against an eight-hour target across all 23 complaint types, including categories such as Blocked Driveway, Abandoned Vehicle, and Animal Abuse where sub-hour physical resolution is implausible. This pattern is consistent with tickets being marked closed upon dispatch rather than upon resolution of the underlying problem. <strong>DOHMH</strong> and <strong>EDC</strong> show apparent median resolution times in the range of years, consistent with bulk administrative closure events identified in the raw data (DOHMH closed 223 tickets in June 2024 that had been open since January 2022; EDC closed 272 helicopter noise complaints similarly). <strong>HPD</strong> has a 0.3 percent ticket closure rate in the matched dataset and a 0 percent SLA compliance rate among those that do close.</p>
+<p>The structural gap noted earlier connects directly to the compliance results: the complaint categories not covered by any SLA (dominated by HPD habitability issues) are also among the most consequential for lower-income residents, and the agencies with the most unreliable measurement practices are handling some of the highest volumes of requests.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="figures/sla_diverging_bar.png" class="img-fluid figure-img" alt="Diverging bar chart of agency SLA compliance ratios"></p>
+<figcaption>Agency Resolution Times vs.&nbsp;SLA Commitments. Bars left of center beat the SLA; bars right miss it. Source: NYC Open Data, Jan 2022–Dec 2025.</figcaption>
+</figure>
+</div>
+<div class="callout-gold">
+<p><strong>Key finding:</strong> DOT and DSNY reliably meet their SLA commitments. DPR, TLC, DOE, and DHS systematically miss theirs. NYPD, DOHMH, EDC, and HPD cannot be meaningfully evaluated with available data due to measurement irregularities.</p>
+</div>
+<p><a href="https://mclycke.github.io/STA9750-2026-SPRING/individual_report">📝 <strong>Full technical report (Mary Lycke)</strong></a></p>
+<hr>
+</section>
+<section id="neighborhood-income-complaint-type-mediates-the-disparity" class="level3">
+<h3 class="anchored" data-anchor-id="neighborhood-income-complaint-type-mediates-the-disparity">Neighborhood Income: Complaint Type Mediates the Disparity</h3>
+<p>Raúl J. Solá Navarro’s analysis spatially joined 12.6 million closed 311 requests to ACS census tract geometries and grouped tracts into five income quintiles. In the unadjusted data, the lowest-income quintile (Q1) has a median resolution time of 8.64 hours, compared to 6.06 hours for the highest-income quintile (Q5), a difference of approximately 43 percent. Q2 at 9.78 hours is actually the slowest quintile, suggesting the relationship between income and resolution time does not follow a simple low-to-high progression even before any controls are applied.</p>
+<p>A regression of log-transformed resolution time on income quintile, controlling for complaint type and borough, reveals that the apparent income gradient largely reflects differences in complaint mix rather than differential treatment within complaint categories. After controls, Q2 through Q5 all show small effects relative to Q1, and the direction is not consistent: Q3 and Q4 are slightly slower than Q1 while Q5 is slightly faster. Bootstrap confidence intervals based on 200 iterations confirm that only Q4 has an interval clearly excluding zero, meaning the income effect for all other quintiles is statistically indistinguishable from zero once complaint type and borough are accounted for.</p>
+<p>Tract-level scatter plots with loess smoothing illustrate the non-linearity: resolution times rise modestly from the lowest-income tracts through roughly the $50,000 income level, then decline gradually, with a steeper drop at the upper end of the income distribution. The wide vertical spread of points at every income level confirms that two tracts with identical incomes can have substantially different resolution times, depending primarily on what their residents tend to report. A side-by-side map of median household income and median 311 resolution time by census tract shows that the two spatial patterns do not closely mirror each other, providing additional visual support for the regression finding.</p>
+<p>The finding is not exculpatory of the system. Lower-income neighborhoods are concentrated in the complaint types that are slowest to resolve by nature, least covered by published SLA targets, and most likely to fall into the HPD habitability category where data quality is poorest. The disparity is real; it is simply not the product of agencies treating similar requests differently based on neighborhood income.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="figures/income_quintile_bar.png" class="img-fluid figure-img" alt="Bar chart of median resolution time by income quintile"></p>
+<figcaption>Median 311 resolution time by neighborhood income quintile. Lower-income quintiles generally show longer median resolution times. Source: NYC Open Data and ACS 2019-2023.</figcaption>
+</figure>
+</div>
+<div class="callout-gold">
+<p><strong>Key finding:</strong> Lower-income census tracts experience 43% longer raw resolution times than higher-income tracts. After controlling for complaint type and borough, the income effect is modest and does not follow a simple high-to-low pattern across quintiles. The disparity is primarily mediated by what types of problems different neighborhoods face, not by differential agency prioritization within complaint categories.</p>
+</div>
+<p><a href="https://raulsolanavarro.github.io/STA9750-2026-SPRING/individual_report_raul.html">📊 <strong>Full technical report (Raúl J. Solá Navarro)</strong></a></p>
+<hr>
+</section>
+<section id="weather-an-unequal-amplifier-across-agency-types" class="level3">
+<h3 class="anchored" data-anchor-id="weather-an-unequal-amplifier-across-agency-types">Weather: An Unequal Amplifier Across Agency Types</h3>
+<p>Evelyn Rodriguez’s analysis matched 12.9 million service requests to daily weather records using a nearest-neighbor spatial join across 16 borough weather stations. Days were classified as Normal, Adverse, or Extreme on five weather dimensions: cold temperature, heat, heavy rain, high wind, and snow. A total of 1.46 percent of requests lacked geographic coordinates and could not be matched to a weather point.</p>
+<p>At the system level, median resolution time is 2.5 times longer on Adverse days and 3.4 times longer on Extreme days relative to the Normal-day baseline of 6.02 hours. The interquartile range widens substantially with severity, indicating that weather does not impose a uniform delay on all requests but rather produces a bifurcated pattern in which some complaints are resolved faster while others are substantially delayed. This widening of the distribution is itself evidence of implicit prioritization during adverse conditions.</p>
+<p>Among weather types, extreme cold produces the longest resolution times overall, with a system-wide median of 25.3 hours, driven primarily by a surge in heat and hot water complaints that are inherently time-intensive and physically constrained by heating system access. Extreme heat is the only weather category associated with faster-than-normal resolution times (3.7 and 4.3 hours for adverse and extreme heat days respectively), a result that partly reflects complaint mix shifts and partly reflects automated closure patterns in DEP water system data. Snow events produce median resolution times of 19.7 hours, and heavy rain in combination with a secondary hazard reaches 22.5 hours.</p>
+<p>Agency-level patterns reflect the nature of each agency’s work. DOHMH shows the most consistent weather-related slowdown across all cold and snowy conditions, approximately 44 percent longer than its agency baseline, consistent with field inspection work being constrained by physical conditions. HPD slows most substantially during extreme heat events (an increase of approximately 103 percent above its baseline), driven by a surge in heat-related complaints that outpaces the agency’s capacity. DPR appears to speed up during storm events, but this is a composition effect: damaged tree complaints surge in large numbers during wind and snow events and are resolved quickly as field crews deploy, shifting the complaint mix and pulling the agency’s median down without reflecting genuine operational acceleration. NYPD, TLC, and DCWP show negligible sensitivity to weather across all categories, consistent with work conducted primarily through dispatch and administrative processes rather than field operations. DSNY closes 100 percent of snow and ice complaints instantly on Extreme snow days, consistent with a protocol trigger rather than case-by-case resolution.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="figures/weather_resolution_by_type.png" class="img-fluid figure-img" alt="Grouped bar chart of median resolution time by weather condition and severity"></p>
+<figcaption>Median 311 resolution time by weather condition. Extreme cold produces the longest delays; extreme heat is the only condition associated with faster-than-normal resolution. Source: NYC Open Data and Open-Meteo Historical Archive API, 2022-2025.</figcaption>
+</figure>
+</div>
+<div class="callout-gold">
+<p><strong>Key finding:</strong> Adverse weather increases median resolution times 2.5x system-wide, with Extreme days reaching 3.4x longer than normal. Field-based agencies slow substantially; enforcement and administrative agencies are largely unaffected. Extreme cold is the most disruptive condition. The complaint types most affected by weather (heat, water, storm damage) are also those concentrated in lower-income neighborhoods.</p>
+</div>
+<p><a href="https://er0driguez.github.io/STA9750-2026-SPRING/individual_report">📈 <strong>Full technical report (Evelyn Rodriguez)</strong></a></p>
+<hr>
+</section>
+<section id="submission-method-channel-effects-are-largely-explained-by-complaint-mix" class="level3">
+<h3 class="anchored" data-anchor-id="submission-method-channel-effects-are-largely-explained-by-complaint-mix">Submission Method: Channel Effects Are Largely Explained by Complaint Mix</h3>
+<p>Xiyao (Jackie) Chen’s analysis examined 12 million service requests across four submission channels: mobile app, online web form, phone, and other. Records with missing timestamps, negative resolution times, and the “unknown” category (0.7 percent of total records, with disproportionately high resolution times) were excluded. A weighted linear regression of log-transformed resolution time was estimated, controlling for borough, problem category, and agency.</p>
+<p>The adjusted predicted resolution times rank as follows: mobile (1.65 hours), online (2.64 hours), other (3.11 hours), and phone (3.61 hours). The mobile channel has the shortest average resolution time by this measure, and the ordering is consistent before and after controls. However, the submission channel is a weak predictor of resolution time in absolute terms: agency identity and complaint category account for the overwhelming share of explained variation in the model, and the channel coefficients are statistically significant only because of the large sample size, not because the effects are large in practice.</p>
+<p>The explanation for the channel ranking lies primarily in user behavior rather than platform processing advantages. Mobile and online submissions are disproportionately noise complaints and illegal parking violations, both of which route to NYPD and close quickly regardless of the channel. Phone submissions carry a substantially higher share of heat and hot water complaints, unsanitary conditions, and housing issues, which resolve slowly regardless of how they were filed. Treemap visualizations of the top five complaint types per channel make this pattern visible: the average resolution time scale for mobile and online complaint mixes runs from 0 to 40 hours, while phone and other complaint mixes extend into ranges above 200 hours.</p>
+<p>A reopen-rate analysis identifies approximately 600,000 duplicate or reopened submissions in the dataset, with phone submissions accounting for the largest share. Unsanitary conditions are the most common complaint type among reopened cases, suggesting that residents whose problems were not genuinely resolved continue to call back, which inflates the phone channel’s apparent average resolution time further.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="figures/channel_adjusted_resolution.png" class="img-fluid figure-img" alt="Horizontal bar chart of adjusted predicted resolution time by submission channel"></p>
+<figcaption>Adjusted resolution time by submission channel, controlling for borough, problem category, and agency. Mobile submissions show the shortest predicted resolution times; phone submissions the longest. Source: NYC Open Data, 2022-2025.</figcaption>
+</figure>
+</div>
+<div class="callout-gold">
+<p><strong>Key finding:</strong> Mobile submissions have the shortest average resolution times, but the channel effect is weak in absolute terms and largely explained by the types of complaints each channel attracts. Agency and complaint category predict resolution time far more strongly than submission method. There is no universally best channel; the optimal choice depends on the type of problem being reported.</p>
+</div>
+<p><a href="https://jackeee101.github.io/STA9750-2026-SPRING/project.html">📑 <strong>Full technical report (Xiyao Jackie Chen)</strong></a></p>
+<hr>
+</section>
+</section>
+<section id="integrating-the-four-analyses" class="level2">
+<h2 class="anchored" data-anchor-id="integrating-the-four-analyses">Integrating the Four Analyses</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Factor</th>
+<th style="text-align: left;">Raw Association with Resolution Time</th>
+<th style="text-align: left;">After Controls</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Agency SLA Compliance</td>
+<td style="text-align: left;">Compliance rates from 0% to 94% across agencies</td>
+<td style="text-align: left;">Structural and persistent; reflects agency operational regimes</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Neighborhood Income</td>
+<td style="text-align: left;">Lowest-income tracts wait 43% longer (median)</td>
+<td style="text-align: left;">Largely mediated by complaint type; small residual income effect</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Weather Severity</td>
+<td style="text-align: left;">Adverse days 2.5x longer; Extreme days 3.4x longer</td>
+<td style="text-align: left;">Varies strongly by agency type (field vs.&nbsp;enforcement)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Submission Channel</td>
+<td style="text-align: left;">Mobile fastest; phone slowest</td>
+<td style="text-align: left;">Largely mediated by complaint type and user behavior</td>
+</tr>
+</tbody>
+</table>
+<p>The four analyses converge on a consistent finding: <strong>complaint type is the master variable.</strong> It determines which agency handles the request, how long that category of problem takes to resolve by its physical nature, whether a published SLA target exists for it, and which sociodemographic and behavioral patterns surround its submission. Income affects resolution times primarily because lower-income neighborhoods generate more of the complaint types that are inherently slow to resolve and least covered by formal accountability structures. Weather amplifies delays primarily by increasing demand for the same slow-resolving categories while constraining the field-based agencies responsible for them. Submission channel correlates with resolution time primarily because different resident populations facing different problem types use different channels.</p>
+<p>The convergence across sub-analyses can be stated quantitatively. The complaint types with no SLA coverage, identified in the agency analysis as dominated by HPD habitability issues, are precisely those driving the largest share of the raw income gap: heat and hot water complaints alone account for a disproportionate fraction of the 43 percent disparity between Q1 and Q5 tracts, and those same complaints are the ones that surge most during the extreme cold events that produce the longest system-wide resolution times. In other words, the residents most likely to wait longest are waiting longest for the same underlying reason across all four sub-analyses: they are filing complaints that the city’s accountability infrastructure was not built to serve efficiently.</p>
+<p>This convergence does not imply that the system is fair or that disparities are inconsequential. Within complaint categories, the income and channel effects are small, suggesting that similar requests are not systematically treated differently based on who files them. But the structural concern runs deeper: the city’s accountability infrastructure is most interpretable, most complete, and most reliable for the complaint types that tend to originate in higher-income neighborhoods and route to operationally consistent agencies. For the complaint types that matter most to lower-income renters, the framework offers less SLA coverage, less reliable data, and less transparency. The disparity is not deliberate prioritization in the conventional sense; it is the accumulated effect of structural choices about which complaints are governed by formal time commitments and which are not.</p>
+<hr>
+</section>
+<section id="directions-for-future-work" class="level2">
+<h2 class="anchored" data-anchor-id="directions-for-future-work">Directions for Future Work</h2>
+<p>Several analytical extensions would materially strengthen these findings. Extending the time horizon back to 2018 would enable pre- and post-COVID comparison of both volume trends and resolution time patterns. Incorporating additional ACS variables, including poverty rate, unemployment, and housing tenure, would provide a more granular picture of the socioeconomic determinants of filing behavior. A direct test for SLA bunching (examining whether complaint closures cluster just before SLA deadlines, and whether that pattern varies systematically by neighborhood income) would distinguish between genuine compliance and strategic closure. On the weather dimension, replacing the 16-point borough-level station grid with a denser coordinate grid would capture hyper-local variation currently averaged out of the analysis. Most fundamentally, partnering with city agencies to obtain verified resolution confirmation, rather than relying on the administrative “closed” timestamp, would transform the evidentiary basis for all four analyses. The NYC 311 dataset is one of the most detailed administrative records of urban service delivery available anywhere, and the patterns it reveals are important enough to warrant continued investigation.</p>
+<hr>
+</section>
+<section id="individual-technical-reports" class="level2">
+<h2 class="anchored" data-anchor-id="individual-technical-reports">Individual Technical Reports</h2>
+<div class="report-link-grid">
+<div class="report-link-card">
+<p>📋 <strong>Agency SLA Compliance</strong><br> Mary Lycke<br> <a href="https://mclycke.github.io/STA9750-2026-SPRING/individual_report">→ View full report</a></p>
+</div>
+<div class="report-link-card">
+<p>🗺️ <strong>Neighborhood Income Effects</strong><br> Raúl J. Solá Navarro<br> <a href="https://raulsolanavarro.github.io/STA9750-2026-SPRING/individual_report_raul.html">→ View full report</a></p>
+</div>
+<div class="report-link-card">
+<p>🌦️ <strong>Weather and Resolution Time</strong><br> Evelyn Rodriguez<br> <a href="https://er0driguez.github.io/STA9750-2026-SPRING/individual_report">→ View full report</a></p>
+</div>
+<div class="report-link-card">
+<p>📱 <strong>Submission Channel Effects</strong><br> Xiyao (Jackie) Chen<br> <a href="https://jackeee101.github.io/STA9750-2026-SPRING/project.html">→ View full report</a></p>
+</div>
+</div>
+<hr>
+</section>
+<section id="data-sources" class="level2">
+<h2 class="anchored" data-anchor-id="data-sources">Data Sources</h2>
+<div class="data-footer">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Dataset</th>
+<th style="text-align: left;">Provider</th>
+<th style="text-align: left;">Coverage</th>
+<th style="text-align: left;">Used For</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">311 Service Requests (erm2-nwe9)</td>
+<td style="text-align: left;">NYC Open Data</td>
+<td style="text-align: left;">Jan 2022 – Dec 2025</td>
+<td style="text-align: left;">Primary dataset for all analyses</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">311 Service Level Agreements (cs9t-e3x8)</td>
+<td style="text-align: left;">NYC Open Data</td>
+<td style="text-align: left;">Current at time of analysis</td>
+<td style="text-align: left;">SLA compliance benchmarks</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">American Community Survey, 5-year estimates</td>
+<td style="text-align: left;">U.S. Census Bureau via <code>tidycensus</code></td>
+<td style="text-align: left;">2019 – 2023</td>
+<td style="text-align: left;">Median household income by census tract</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Historical Archive API</td>
+<td style="text-align: left;">Open-Meteo</td>
+<td style="text-align: left;">Jan 2022 – Dec 2025</td>
+<td style="text-align: left;">Daily weather records for 16 NYC points</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Analysis window:</strong> January 1, 2022 through December 31, 2025.</li>
+<li><strong>Course:</strong> STA 9750, Baruch College, Spring 2026.</li>
+<li><strong>Group:</strong> 3-1-Fun! (Group 2).</li>
+</ul>
+</div>
+<hr>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-1-contents" aria-controls="callout-1" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-1" class="callout-1-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>🤖 <strong>AI Usage Statement</strong></p>
+<p>Claude (Anthropic) was used to assist with the technical construction of this summary report, including Quarto document structure, CSS styling and branding, figure placement, and debugging rendering issues. Claude was also used to help identify a coherent framework for integrating the four individual analyses into a unified narrative. All prose, analysis, conclusions, and written content in this report are the original work of the project team. Claude was not used to write, edit, or generate any text appearing in the report body, nor was it used in any of the four individual technical reports.</p>
+</div>
+</div>
+</div>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/RaulSolaNavarro\.github\.io\/STA9750-2026-SPRING\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+<script src="site_libs/quarto-html/zenscroll-min.js"></script>
+</body></html>
