@@ -1,6 +1,8 @@
 project:
   type: website
   output-dir: docs
+  render:
+    - "!summary_report.qmd"
 
 website:
   title: "Data Analysis - Research Reports"
@@ -10,7 +12,7 @@ website:
   navbar:
     background: primary
     search: false
-    
+
 format:
   html:
     theme: litera
