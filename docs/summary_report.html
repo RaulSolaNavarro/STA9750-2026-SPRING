@@ -51,12 +51,6 @@ ul.task-list li input[type="checkbox"] {
     --toc-width:    200px;
   }
 
-  main#quarto-document-content {
-    margin-left: var(--toc-width) !important;
-    width: auto !important;
-    padding: 2rem 2.5rem !important;
-  }
-
   *, *::before, *::after { box-sizing: border-box; }
 
   body {
@@ -88,7 +82,7 @@ ul.task-list li input[type="checkbox"] {
 
   main#quarto-document-content {
     margin-left: var(--toc-width) !important;
-    max-width: none !important;
+    max-width: 1350px !important;
     width: auto !important;
     padding: 2rem 2.5rem !important;
   }
@@ -99,10 +93,12 @@ ul.task-list li input[type="checkbox"] {
     margin-left: var(--toc-width) !important;
   }
 
-  .quarto-title-banner .title {
+  .quarto-title-banner .title,
+  .quarto-title h1.title,
+  h1.title {
     color: var(--brand-gold) !important;
     font-family: "Helvetica Neue", Arial, sans-serif !important;
-    font-size: 4rem !important;
+    font-size: 3rem !important;
     font-weight: 700 !important;
     border-bottom: 2px solid var(--brand-gold);
     padding-bottom: 0.3rem;
@@ -284,10 +280,11 @@ ul.task-list li input[type="checkbox"] {
       width: 100%;
       height: auto;
     }
-    .quarto-title-banner .title,
-  .quarto-title h1.title,
-  h1.title {
-    font-size: 6rem !important;
+    .quarto-title-banner,
+    .quarto-title-meta,
+    main#quarto-document-content {
+      margin-left: 0 !important;
+    }
   }
 </style>
 <script>
