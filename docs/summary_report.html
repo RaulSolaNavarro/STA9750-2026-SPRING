@@ -64,6 +64,8 @@ ul.task-list li input[type="checkbox"] {
     --brand-mid:    #2e2e2e;
     --brand-light:  #f9f6ee;
     --brand-accent: #c9a800;
+    --toc-width:    240px;
+    --content-max:  860px;
   }
 
   body {
@@ -72,8 +74,11 @@ ul.task-list li input[type="checkbox"] {
     font-family: "Georgia", serif;
     font-size: 1.05rem;
     line-height: 1.75;
+    margin: 0;
+    padding: 0;
   }
 
+  /* ── Title banner ── */
   .quarto-title-banner,
   .navbar {
     background-color: var(--brand-dark) !important;
@@ -90,6 +95,7 @@ ul.task-list li input[type="checkbox"] {
   .quarto-title-banner {
     padding-top: 1.2rem !important;
     padding-bottom: 1.2rem !important;
+    padding-left: 2rem !important;
   }
 
   .quarto-title .title {
@@ -101,6 +107,72 @@ ul.task-list li input[type="checkbox"] {
     margin-top: 0.3rem !important;
   }
 
+  /* ── Main layout grid ── */
+  #quarto-content {
+    display: grid !important;
+    grid-template-columns: var(--toc-width) 1fr !important;
+    grid-template-areas: "sidebar main" !important;
+    max-width: calc(var(--toc-width) + var(--content-max)) !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+
+  /* ── TOC sidebar ── */
+  #TOC {
+    grid-area: sidebar !important;
+    background-color: var(--brand-dark) !important;
+    padding: 1.5rem 1rem !important;
+    min-height: 100vh !important;
+    position: sticky !important;
+    top: 0 !important;
+    align-self: start !important;
+  }
+
+  #TOC ul {
+    list-style: none !important;
+    padding-left: 0 !important;
+    margin: 0 !important;
+  }
+
+  #TOC li {
+    margin: 0.4rem 0 !important;
+  }
+
+  #TOC a {
+    color: var(--brand-gold) !important;
+    text-decoration: none !important;
+    font-family: "Helvetica Neue", Arial, sans-serif !important;
+    font-size: 0.88rem !important;
+  }
+
+  #TOC a:hover {
+    color: #ffffff !important;
+  }
+
+  #TOC .toc-active {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+  }
+
+  /* ── Main content area ── */
+  #quarto-document-content,
+  main.content {
+    grid-area: main !important;
+    padding: 2rem 2.5rem !important;
+    max-width: var(--content-max) !important;
+  }
+
+  /* ── Author/date block ── */
+  .quarto-title-meta {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 1rem !important;
+    padding: 1.5rem 2rem !important;
+    background-color: var(--brand-light) !important;
+  }
+
+  /* ── Section headings ── */
   h1, h2 {
     color: var(--brand-dark);
     font-family: "Helvetica Neue", "Arial", sans-serif;
@@ -117,38 +189,7 @@ ul.task-list li input[type="checkbox"] {
     margin-top: 1.6rem;
   }
 
-  #quarto-sidebar {
-    background-color: var(--brand-dark);
-  }
-
-  .sidebar-navigation a,
-  nav.sidebar-navigation > ul li a {
-    color: var(--brand-gold) !important;
-  }
-
-  nav.sidebar-navigation > ul li a:hover {
-    color: #ffffff !important;
-  }
-
-  #TOC {
-    background-color: var(--brand-dark);
-    padding: 1rem;
-    border-radius: 4px;
-  }
-
-  #TOC a {
-    color: var(--brand-gold) !important;
-  }
-
-  #TOC a:hover {
-    color: #ffffff !important;
-  }
-
-  #TOC .active {
-    color: #ffffff !important;
-    font-weight: 700;
-  }
-
+  /* ── Gold callout boxes ── */
   .callout-gold {
     background-color: var(--brand-gold);
     color: var(--brand-dark);
@@ -161,6 +202,7 @@ ul.task-list li input[type="checkbox"] {
     font-size: 1.02rem;
   }
 
+  /* ── Links ── */
   a {
     color: var(--brand-accent);
     text-decoration: none;
@@ -171,6 +213,7 @@ ul.task-list li input[type="checkbox"] {
     text-decoration: underline;
   }
 
+  /* ── Tables ── */
   table {
     font-size: 0.92rem;
     border-collapse: collapse;
@@ -192,6 +235,7 @@ ul.task-list li input[type="checkbox"] {
     border: 1px solid #ccc;
   }
 
+  /* ── Report link cards ── */
   .report-link-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -217,12 +261,19 @@ ul.task-list li input[type="checkbox"] {
     color: #ffffff;
   }
 
+  /* ── Footer ── */
   .data-footer {
     font-size: 0.82rem;
     color: #666;
     margin-top: 2.5rem;
     border-top: 1px solid #ccc;
     padding-top: 0.8rem;
+  }
+
+  /* ── Figures ── */
+  img {
+    max-width: 100% !important;
+    height: auto !important;
   }
 </style>
 
@@ -233,14 +284,14 @@ ul.task-list li input[type="checkbox"] {
 
 <header id="title-block-header" class="quarto-title-block default toc-left page-columns page-full">
   <div class="quarto-title-banner page-columns page-full">
-    <div class="quarto-title column-body">
+    <div class="quarto-title column-page-right">
       <h1 class="title">311 Response and Resolution</h1>
             <p class="subtitle lead">What Factors Drive NYC 311 Service Request Resolution Times, and Do They Suggest Segmented Prioritization of Issues?</p>
                       </div>
   </div>
     
   
-  <div class="quarto-title-meta">
+  <div class="quarto-title-meta column-page-right">
 
       <div>
       <div class="quarto-title-meta-heading">Authors</div>
@@ -263,7 +314,7 @@ ul.task-list li input[type="checkbox"] {
     </div>
     
   
-  </header><div id="quarto-content" class="page-columns page-rows-contents page-layout-article toc-left">
+  </header><div id="quarto-content" class="page-columns page-rows-contents page-layout-full toc-left">
 <div id="quarto-sidebar-toc-left" class="sidebar toc-left">
   <nav id="TOC" role="doc-toc" class="toc-active">
     <h2 id="toc-title">Contents</h2>
@@ -282,7 +333,7 @@ ul.task-list li input[type="checkbox"] {
 </div>
 <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
 </div>
-<main class="content quarto-banner-title-block" id="quarto-document-content">
+<main class="content quarto-banner-title-block column-page-right" id="quarto-document-content">
 
 
 
