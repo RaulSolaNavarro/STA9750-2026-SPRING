@@ -25,7 +25,6 @@ format:
     include-in-header:
       text: |
         <style>
-          /* ── Brand palette (matches presentation) ─────────────────────────── */
           :root {
             --brand-gold:   #F5C518;
             --brand-dark:   #1a1a1a;
@@ -34,7 +33,6 @@ format:
             --brand-accent: #c9a800;
           }
 
-          /* ── Page background and base text ────────────────────────────────── */
           body {
             background-color: var(--brand-light);
             color: var(--brand-dark);
@@ -43,7 +41,6 @@ format:
             line-height: 1.75;
           }
 
-          /* ── Title banner ──────────────────────────────────────────────────── */
           .quarto-title-banner,
           .navbar {
             background-color: var(--brand-dark) !important;
@@ -56,8 +53,7 @@ format:
           .quarto-title-banner .quarto-title-meta-heading {
             color: var(--brand-gold) !important;
           }
-          
-          /* ── Reduce banner height ──────────────────────────────────────────────── */
+
           .quarto-title-banner {
             padding-top: 1.2rem !important;
             padding-bottom: 1.2rem !important;
@@ -72,7 +68,6 @@ format:
             margin-top: 0.3rem !important;
           }
 
-          /* ── Section headings ──────────────────────────────────────────────── */
           h1, h2 {
             color: var(--brand-dark);
             font-family: "Helvetica Neue", "Arial", sans-serif;
@@ -89,7 +84,6 @@ format:
             margin-top: 1.6rem;
           }
 
-          /* ── TOC sidebar ───────────────────────────────────────────────────── */
           #quarto-sidebar {
             background-color: var(--brand-dark);
           }
@@ -103,7 +97,25 @@ format:
             color: #ffffff !important;
           }
 
-          /* ── Gold callout boxes ────────────────────────────────────────────── */
+          #TOC {
+            background-color: var(--brand-dark);
+            padding: 1rem;
+            border-radius: 4px;
+          }
+
+          #TOC a {
+            color: var(--brand-gold) !important;
+          }
+
+          #TOC a:hover {
+            color: #ffffff !important;
+          }
+
+          #TOC .active {
+            color: #ffffff !important;
+            font-weight: 700;
+          }
+
           .callout-gold {
             background-color: var(--brand-gold);
             color: var(--brand-dark);
@@ -116,36 +128,37 @@ format:
             font-size: 1.02rem;
           }
 
-          /* ── Links ─────────────────────────────────────────────────────────── */
           a {
             color: var(--brand-accent);
             text-decoration: none;
           }
+
           a:hover {
             color: var(--brand-dark);
             text-decoration: underline;
           }
 
-          /* ── Tables ────────────────────────────────────────────────────────── */
           table {
             font-size: 0.92rem;
             border-collapse: collapse;
             width: 100%;
             margin: 1.2rem 0;
           }
+
           thead tr {
             background-color: var(--brand-dark);
             color: var(--brand-gold);
           }
+
           tbody tr:nth-child(even) {
             background-color: #f0ede3;
           }
+
           td, th {
             padding: 0.5rem 0.8rem;
             border: 1px solid #ccc;
           }
 
-          /* ── Report link cards at bottom ───────────────────────────────────── */
           .report-link-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -171,7 +184,6 @@ format:
             color: #ffffff;
           }
 
-          /* ── Footer ────────────────────────────────────────────────────────── */
           .data-footer {
             font-size: 0.82rem;
             color: #666;
