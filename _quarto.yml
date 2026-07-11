@@ -6,9 +6,10 @@ project:
 
 website:
   title: "Data Analysis - Research Reports"
-  description:
+  description: >
     Course Projects for STA 9750 at Baruch College
   site-url: "https://RaulSolaNavarro.github.io/STA9750-2026-SPRING/"
+  open-graph: true
   navbar:
     background: primary
     search: false
