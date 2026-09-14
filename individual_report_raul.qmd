@@ -29,19 +29,17 @@ bibliography: references.bib
 #| label: setup
 #| cache: false
 
-# Core packages ----------------------------------------------------------------
-library(tidyverse)      # data wrangling and visualization
-library(sf)             # spatial features and joins
-library(tidycensus)     # ACS income data via Census API
-library(gt)             # publication-quality tables with color scales
-library(leaflet)        # interactive choropleth maps
-library(plotly)         # interactive scatter plots
-library(quantreg)       # quantile regression (rq())
-library(broom)          # tidy model output
-library(patchwork)      # composing multi-panel ggplots
-library(scales)         # axis label formatting
+library(tidyverse)
+library(sf)
+library(tidycensus)
+library(gt)
+library(leaflet)
+library(plotly)
+library(quantreg)
+library(broom)
+library(patchwork)
+library(scales)
 
-# Reproducibility seed for any stochastic steps --------------------------------
 set.seed(9750)
 ```
 
@@ -63,7 +61,7 @@ longer than Noise complaints" is uninterpretable: it could reflect genuine
 complexity differences, or it could reflect the fact that Heat/Hot Water is
 overwhelmingly a lower-income complaint. The income dimension is the lens
 that distinguishes **structural inequality** from **complaint complexity**.
-My specific question is therefore a necessary condition for answering the 
+My specific question is therefore a necessary condition for answering the
 Overarching Question (OQ), not merely one factor among many.[^sq-irreplaceable]
 
 [^sq-irreplaceable]: The other three sub-analyses (SLA compliance, weather,
@@ -157,20 +155,6 @@ chunk loads those cached files for all downstream analysis.
 #| label: fn-definitions
 #| cache: false
 
-# =============================================================================
-# Helper functions
-# =============================================================================
-# Defined early so all downstream chunks can call them.
-# Each function encapsulates one logical step and is independently re-usable.
-
-#' Pull closed 311 requests from the NYC Open Data Socrata API
-#'
-#' Uses a server-side SoQL filter so only closed requests in the date window
-#' are transferred, dramatically reducing download size vs. a full pull.
-#'
-#' @param start_date ISO date string; lower bound on created_date
-#' @param end_date   ISO date string; upper bound on created_date
-#' @return A tibble of raw 311 records
 pull_311_from_socrata <- function(start_date = "2022-01-01",
                                   end_date   = "2026-01-01") {
   query_url <- paste0(
@@ -183,23 +167,12 @@ pull_311_from_socrata <- function(start_date = "2022-01-01",
   readr::read_csv(query_url, show_col_types = FALSE)
 }
 
-#' Clean raw 311 records and compute resolution time in hours
-#'
-#' Removes records with missing timestamps, negative or implausibly large
-#' resolution times, and unspecified boroughs. Sets exact-zero resolution
-#' times to 0.01 hours to avoid log(0) = -Inf in downstream models.
-#'
-#' @param raw_df Raw 311 tibble from pull_311_from_socrata()
-#' @return Cleaned tibble with a numeric resolution_hours column
 clean_311 <- function(raw_df) {
   raw_df |>
     as_tibble() |>
     mutate(
       created_date = as.POSIXct(created_date),
       closed_date  = as.POSIXct(closed_date),
-      # Resolution time in hours. We log-transform this in all models, so
-      # exact zeros are set to 0.01 (36 seconds) to avoid log(0) = -Inf
-      # without discarding the record entirely.
       resolution_hours = as.numeric(
         difftime(closed_date, created_date, units = "hours")
       ),
@@ -209,45 +182,17 @@ clean_311 <- function(raw_df) {
       !is.na(created_date),
       !is.na(closed_date),
       resolution_hours >  0,
-      # Cap at 1 year (8,760 hours). Requests open longer than this are
-      # almost certainly administrative artifacts rather than genuine
-      # unresolved cases still being tracked.
       resolution_hours <= 8760,
       borough != "Unspecified"
     )
 }
 
-#' Assign income quintiles to census tracts
-#'
-#' Quintiles are preferred over continuous income for two reasons:
-#' (1) They are robust to the ~11% of tracts with high ACS margins of error
-#'     (CV > 50%), since bucketing absorbs individual-tract noise.
-#' (2) They make regression coefficients directly interpretable as
-#'     comparisons between named income groups.
-#'
-#' @param income_df sf tibble with a numeric column `estimate` (median income)
-#' @return income_df with an added integer column `income_quintile` (1-5)
 assign_quintiles <- function(income_df) {
   income_df |>
     filter(!is.na(estimate), estimate > 0) |>
     mutate(income_quintile = ntile(estimate, 5))
 }
 
-#' Bootstrap a regression to produce confidence intervals
-#'
-#' Runs OLS of log(resolution_hours) on income quintile, complaint type,
-#' and borough on repeated random samples, then summarises the distribution
-#' of quintile coefficients into mean estimates and 95% CIs.
-#'
-#' We use a 10,000-row sample per iteration due to memory constraints on a
-#' standard laptop. With 12.6M records even a 0.1% sample produces stable
-#' estimates at the effect sizes observed here. 200 iterations balances
-#' variance reduction against runtime (~5 min total).
-#'
-#' @param df       Full analysis dataset
-#' @param n_sample Rows to sample per iteration (default 10,000)
-#' @param n_boot   Number of bootstrap iterations (default 200)
-#' @return Tibble with columns term, mean_estimate, ci_lower, ci_upper
 run_bootstrap <- function(df, n_sample = 10000, n_boot = 200) {
   boot_results <- map_dfr(seq_len(n_boot), function(i) {
     samp <- df |> slice_sample(n = n_sample)
@@ -275,9 +220,6 @@ run_bootstrap <- function(df, n_sample = 10000, n_boot = 200) {
 #| cache: true
 #| eval: false
 
-# Full programmatic acquisition via Socrata API (dataset erm2-nwe9).
-# Set eval: true and run once to refresh; then set back to eval: false.
-# Output is saved to data/clean_311_final.rds for fast loading below.
 raw_311 <- pull_311_from_socrata(
   start_date = "2022-01-01",
   end_date   = "2026-01-01"
@@ -290,10 +232,6 @@ saveRDS(clean_311(raw_311), "data/clean_311_final.rds")
 #| cache: true
 #| eval: false
 
-# Pull ACS median household income for all five NYC boroughs at the census
-# tract level with tract geometries for spatial joining.
-# Variable B19013_001 = median household income in the past 12 months (2023 $).
-# Set eval: true to re-pull; requires a Census API key set via census_api_key().
 nyc_income_raw <- get_acs(
   geography = "tract",
   variables = "B19013_001",
@@ -301,9 +239,9 @@ nyc_income_raw <- get_acs(
   county    = c("New York", "Kings", "Queens", "Bronx", "Richmond"),
   year      = 2023,
   survey    = "acs5",
-  geometry  = TRUE   # include tract polygons for spatial join and mapping
+  geometry  = TRUE
 ) |>
-  st_transform(crs = 4326)   # WGS84 for leaflet compatibility
+  st_transform(crs = 4326)
 saveRDS(nyc_income_raw, "data/nyc_income_tracts.rds")
 ```
 
@@ -311,9 +249,6 @@ saveRDS(nyc_income_raw, "data/nyc_income_tracts.rds")
 #| label: load-data
 #| cache: false
 
-# Load pre-processed data files produced by the pull chunks above.
-# The pull chunks (eval: false) preserve the full acquisition code for
-# reproducibility; these .rds files are their cached outputs.
 df_clean   <- readRDS("data/clean_311_final.rds")
 nyc_income <- readRDS("data/nyc_income_tracts.rds")
 ```
@@ -322,9 +257,18 @@ nyc_income <- readRDS("data/nyc_income_tracts.rds")
 #| label: clean-and-join
 #| cache: false
 
-income_quintiles <- assign_quintiles(nyc_income)
+income_quintiles <- nyc_income |>
+  filter(!is.na(estimate), estimate > 0) |>
+  mutate(income_quintile = ntile(estimate, 5))
 
-df <- df_clean
+# Join income quintile and median income onto 311 records by geoid
+df <- df_clean |>
+  left_join(
+    income_quintiles |>
+      st_drop_geometry() |>
+      select(geoid, median_income = estimate, income_quintile),
+    by = "geoid"
+  )
 
 tract_stats <- df |>
   group_by(geoid, median_income, income_quintile) |>
@@ -343,11 +287,8 @@ tract_stats <- df |>
 ```{r}
 #| label: data-quality-summary
 
-# n_raw is hardcoded from the original full pull because raw_311 is not
-# loaded at render time (pull-311 is eval: false). Update this value if
-# the data is re-pulled.
-n_raw   <- 13066215   # raw count before cleaning; from original data_pull.R run
-n_clean <- nrow(df_clean)   # 12,624,692
+n_raw   <- 13066215
+n_clean <- nrow(df_clean)
 n_removed   <- n_raw - n_clean
 pct_removed <- round(100 * n_removed / n_raw, 1)
 
@@ -355,10 +296,6 @@ n_tracts_raw  <- nrow(nyc_income)
 n_missing_inc <- sum(is.na(nyc_income$estimate))
 pct_missing   <- round(100 * n_missing_inc / n_tracts_raw, 1)
 
-# Coefficient of variation = (MOE / 1.645) / estimate.
-# Dividing by 1.645 converts the ACS 90%-confidence MOE to a standard error.
-# A CV > 50% means the standard error exceeds half the estimate (too noisy)
-# for reliable tract-level inference.
 high_cv_tracts <- nyc_income |>
   st_drop_geometry() |>
   filter(!is.na(estimate), estimate > 0) |>
@@ -394,7 +331,7 @@ census tracts, `r pct_missing`% had missing income estimates and
 ### Cross-validation of income quintile boundaries {#sec-cv-check}
 
 As a sanity check, we compare our quintile income breakpoints against NYC
-Department of City Planning neighborhood profiles.[^dcp-check] The Q1/Q2 
+Department of City Planning neighborhood profiles.[^dcp-check] The Q1/Q2
 boundary falls at approximately
 `r scales::dollar(quantile(income_quintiles$estimate, 0.2, na.rm = TRUE))`,
 and the Q4/Q5 boundary at approximately
@@ -418,7 +355,6 @@ the Upper East Side, and parts of Staten Island's North Shore.
 ```{r}
 #| label: robustness-high-cv
 
-# nyc_income uses lowercase 'geoid' (already processed by original pipeline)
 low_cv_geoids <- nyc_income |>
   st_drop_geometry() |>
   filter(!is.na(estimate), estimate > 0) |>
@@ -473,9 +409,6 @@ resolve within hours, but a long tail of slow resolutions pulls the mean to
 #| label: tbl-quintile-summary
 #| tbl-cap: "Median and mean 311 resolution time by neighborhood income quintile (full sample)"
 
-# gt with data_color() applies a color scale to the median hours column,
-# making the Q1/Q2 disparity immediately visible without requiring
-# the reader to compare numbers across rows.
 quintile_summary_full |>
   mutate(
     income_quintile = case_when(
@@ -496,7 +429,6 @@ quintile_summary_full |>
     n               = "Requests"
   ) |>
   fmt_number(columns = n, use_seps = TRUE, decimals = 0) |>
-  # Darker blue = longer wait; draws the eye immediately to Q1 and Q2
   data_color(
     columns = median_hours,
     palette = "Blues",
@@ -622,13 +554,11 @@ median resolution time for that type.
 #| fig-cap: "Share of requests by complaint type and income quintile (top 12 types by volume). Darker blue indicates a higher share of that quintile's requests. Rows are ordered from slowest (top) to fastest (bottom) resolving type. Lower-income quintiles concentrate in the slow rows; higher-income quintiles in the fast rows."
 #| fig-height: 7
 
-# Identify the 12 highest-volume complaint types across all quintiles
 top_complaints <- df |>
   count(complaint_type, sort = TRUE) |>
   slice_head(n = 12) |>
   pull(complaint_type)
 
-# Within-quintile share and type-level median for row ordering
 heatmap_data <- df |>
   filter(complaint_type %in% top_complaints) |>
   group_by(income_quintile, complaint_type) |>
@@ -643,11 +573,10 @@ heatmap_data <- df |>
   mutate(
     quintile_label = paste0("Q", income_quintile),
     complaint_type = str_wrap(complaint_type, width = 28),
-    # Slowest complaint types at the top of the y-axis
     complaint_type = fct_reorder(complaint_type, median_hours, .fun = mean)
   )
 
-ggplot(heatmap_data,
+p_heatmap <- ggplot(heatmap_data,
        aes(x = quintile_label, y = complaint_type, fill = share)) +
   geom_tile(color = "white", linewidth = 0.4) +
   geom_text(
@@ -673,6 +602,20 @@ ggplot(heatmap_data,
     axis.text.y     = element_text(size = 10),
     legend.position = "right"
   )
+
+p_heatmap
+```
+
+```{r}
+#| label: save-heatmap-for-summary
+#| include: false
+#| cache: false
+
+ggsave("figures/income_complaint_heatmap.png",
+       plot   = p_heatmap,
+       width  = 9,
+       height = 6,
+       dpi    = 150)
 ```
 
 The heatmap makes the mediating mechanism visible: **Q1 and Q2 tracts
@@ -694,8 +637,8 @@ differences to an income effect.[^mediator-note]
 ### Tract-level scatter {#sec-eda-scatter}
 
 ```{r}
-#| label: fig-scatter
-#| fig-cap: "Each point is one census tract (minimum 50 requests). The loess curve reveals a non-linear relationship: resolution times rise slightly through roughly $50,000 median income, then gradually decline. The wide vertical spread at every income level shows that income alone explains little tract-level variation."
+#| label: prep-scatter-data
+#| cache: false
 
 tract_plot_data <- df |>
   filter(!is.na(geoid), !is.na(median_income)) |>
@@ -705,49 +648,86 @@ tract_plot_data <- df |>
     n            = n(),
     .groups      = "drop"
   ) |>
-  filter(n >= 50)   # require at least 50 requests for a stable tract median
+  filter(n >= 50)
+```
 
-# Build as ggplot first so ggplotly can inherit aesthetics cleanly
-p_scatter <- ggplot(
+```{r}
+#| label: fig-scatter
+#| fig-cap: "Each point is one census tract (minimum 50 requests). The loess curve reveals a non-linear relationship: resolution times rise slightly through roughly $50,000 median income, then gradually decline. The wide vertical spread at every income level shows that income alone explains little tract-level variation."
+
+# Pre-compute loess fit so plotly can render it as a line
+loess_fit <- loess(log(median_hours) ~ median_income, data = tract_plot_data, span = 0.75)
+loess_df <- tibble(
+  median_income = seq(min(tract_plot_data$median_income),
+                      max(tract_plot_data$median_income),
+                      length.out = 200),
+) |>
+  mutate(fitted_log = predict(loess_fit, newdata = tibble(median_income = median_income)),
+         fitted = exp(fitted_log))
+
+plot_ly() |>
+  add_markers(
+    data = tract_plot_data,
+    x = ~median_income,
+    y = ~median_hours,
+    text = ~paste0("Tract: ", geoid,
+                   "<br>Income: ", scales::dollar(median_income),
+                   "<br>Median hrs: ", round(median_hours, 1),
+                   "<br>N requests: ", scales::comma(n)),
+    hoverinfo = "text",
+    marker = list(color = "#2171b5", opacity = 0.3, size = 5),
+    name = "Census tracts"
+  ) |>
+  add_lines(
+    data = loess_df,
+    x = ~median_income,
+    y = ~fitted,
+    line = list(color = "red", width = 2),
+    name = "Loess smoother",
+    hoverinfo = "none"
+  ) |>
+  layout(
+    title = list(text = "Tract-level income vs. median 311 resolution time<br><sup>Hover for tract details</sup>"),
+    xaxis = list(title = "Median household income (ACS 2019-2023)",
+                 tickformat = "$,.0f"),
+    yaxis = list(title = "Median resolution time (hours, log scale)",
+                 type = "log"),
+    hoverlabel = list(bgcolor = "white")
+  )
+```
+
+```{r}
+#| label: save-scatter-for-summary
+#| include: false
+#| cache: false
+
+p_scatter_static <- ggplot(
     tract_plot_data,
-    aes(
-      x    = median_income,
-      y    = median_hours,
-      text = paste0(
-        "Tract: ",        geoid,
-        "<br>Income: ",   scales::dollar(median_income),
-        "<br>Median hrs: ", round(median_hours, 1),
-        "<br>N requests: ", scales::comma(n)
-      )
-    )
+    aes(x = median_income, y = median_hours)
   ) +
   geom_point(alpha = 0.3, size = 0.8, color = "#2171b5") +
   geom_smooth(method = "loess", color = "red", se = TRUE) +
   scale_x_continuous(labels = scales::dollar) +
   scale_y_log10(labels = scales::comma) +
   labs(
-    title    = "Tract-level income vs. median 311 resolution time",
-    subtitle = "Loess smoothing line with 95% CI; log scale on y-axis",
-    x        = "Median household income (ACS 2019-2023)",
-    y        = "Median resolution time (hours, log scale)",
-    caption  = "Loess span = 0.75 (default). Each point = one census tract, min. 50 requests."
+    title   = "Tract-level income vs. median 311 resolution time",
+    x       = "Median household income (ACS 2019-2023)",
+    y       = "Median resolution time (hours, log scale)",
+    caption = "Each point is one census tract (min. 50 requests). Loess smoother in red."
   ) +
   theme_minimal(base_size = 13) +
   theme(plot.title = element_text(face = "bold"))
 
-# Wrap in plotly for hover interactivity
-ggplotly(p_scatter, tooltip = "text") |>
-  layout(
-    title = list(
-      text = "Tract-level income vs. median 311 resolution time<br><sup>Hover for tract details</sup>"
-    ),
-    hoverlabel = list(bgcolor = "white")
-  )
+ggsave("figures/income_scatter_loess.png",
+       plot   = p_scatter_static,
+       width  = 8,
+       height = 5,
+       dpi    = 150)
 ```
 
 ::: {.callout-note}
-**Interactive:** Hover over any point above to see the census tract "geoid" 
-(identifier),median household income, median resolution time, and request count 
+**Interactive:** Hover over any point above to see the census tract "geoid"
+(identifier), median household income, median resolution time, and request count
 for that tract.
 :::
 
@@ -761,15 +741,6 @@ for that tract.
 #| label: model-ols
 #| cache: false
 
-# We fit the OLS on a 500,000-row sample for computational feasibility.
-# With 12.6M observations and small effect sizes, estimates are stable
-# well below this sample size. The full-data bootstrap below provides
-# an additional check on uncertainty.
-# Log-transform for two reasons:
-# (1) Compresses the right tail, making residuals more nearly normal.
-# (2) Coefficients interpretable as approximate % differences:
-#     exp(beta) - 1 ~ beta for |beta| < 0.1, which holds here.
-# Reference category: Q1 (lowest income).
 set.seed(9750)
 df_model_sample <- df |> slice_sample(n = 500000)
 
@@ -778,7 +749,6 @@ model_full <- lm(
   data = df_model_sample
 )
 
-# Extract only the income quintile terms for display
 model_results <- tidy(model_full, conf.int = TRUE) |>
   filter(str_detect(term, "income_quintile")) |>
   mutate(
@@ -824,8 +794,8 @@ model_results |>
     locations = cells_body(rows = quintile_label == "Q5 (Highest)")
   ) |>
   tab_footnote(
-  footnote  = "All p-values are < 0.001 even on a 500,000-row sample. Statistical significance does not imply practical significance (see the %   difference column for magnitude).",
-  locations = cells_column_labels(p_str)
+    footnote  = "All p-values are < 0.001 even on a 500,000-row sample. Statistical significance does not imply practical significance (see the % difference column for magnitude).",
+    locations = cells_column_labels(p_str)
   ) |>
   tab_footnote(
     footnote  = "% difference = (exp(estimate) - 1) x 100. This approximation is accurate for |estimate| < 0.1, which holds for all coefficients shown.",
@@ -856,9 +826,6 @@ mediates most of the disparity.
 #| label: bootstrap-ci
 #| cache: true
 
-# Bootstrap the regression on a 10,000-row sample per iteration.
-# 200 iterations is sufficient to stabilize 95% CI bounds at the effect
-# sizes observed here (all betas well under 0.1 log-hours).
 boot_ci <- run_bootstrap(df, n_sample = 10000, n_boot = 200)
 ```
 
@@ -913,10 +880,6 @@ systematic advantage for higher-income neighborhoods.
 #| label: stratified-regression
 #| cache: false
 
-# Fit a separate OLS for each of the top 8 complaint types by volume.
-# Within each stratum, complaint type is held constant by construction so
-# only borough is needed as a control. This directly tests whether the
-# income effect persists within categories or only appears across them.
 top8_complaints <- df |>
   count(complaint_type, sort = TRUE) |>
   slice_head(n = 8) |>
@@ -931,13 +894,18 @@ stratified_results <- map_dfr(top8_complaints, function(ct) {
     data = sub_df
   )
 
-  tidy(fit, conf.int = TRUE) |>
-    filter(str_detect(term, "income_quintile5")) |>   # Q5 vs Q1
-    mutate(
-      complaint_type = ct,
-      pct_diff       = round((exp(estimate) - 1) * 100, 1),
-      n_requests     = nrow(sub_df)
-    )
+  coefs <- tidy(fit, conf.int = TRUE)
+  row <- coefs |> filter(str_detect(term, "income_quintile5"))
+  if (nrow(row) == 0) return(NULL)
+
+  tibble(
+    complaint_type = ct,
+    estimate       = row$estimate,
+    conf.low       = row$conf.low,
+    conf.high      = row$conf.high,
+    pct_diff       = round((exp(row$estimate) - 1) * 100, 1),
+    n_requests     = nrow(sub_df)
+  )
 })
 ```
 
@@ -1012,30 +980,9 @@ slowest-resolving requests) we fit quantile regressions at the 50th,
 #| label: quantile-regression
 #| cache: true
 
-# Quantile regression tests whether the income effect on resolution time
-# is uniform across the distribution or concentrated in the tail.
-# If lower-income tracts are specifically disadvantaged for the very slowest
-# requests (90th percentile), that would suggest a more severe equity problem
-# than a uniform average effect. OLS cannot detect this because it only
-# estimates conditional means.
-#
-# We use a 100,000-row sample for computational feasibility. Quantile
-# regression at the 90th percentile requires more data than the median
-# for stable estimates, but 100k is well above the threshold needed here.
-# Results are stable across repeated samples at this size.
-#
-# se = "nid" uses the asymptotic sandwich estimator (Hendricks & Koenker,
-# 1992) rather than bootstrapping, which is orders of magnitude faster
-# and produces equivalent standard errors for large samples.
-
-set.seed(9750)   # ensures the sample is reproducible across renders
+set.seed(9750)
 df_qr_sample <- df |> slice_sample(n = 100000)
 
-# Extract the Q5 vs Q1 coefficient manually from each model.
-# broom::tidy() does not reliably support rq objects, so we pull
-# coefficients directly from the summary matrix. The row name for the
-# Q5 indicator in a factor() call is "factor(income_quintile)5" -
-# the grep pattern escapes the parentheses to match this exactly.
 qr_results <- map_dfr(c(0.50, 0.75, 0.90), function(tau) {
   mod <- rq(
     log(resolution_hours) ~ factor(income_quintile) + borough,
@@ -1043,24 +990,18 @@ qr_results <- map_dfr(c(0.50, 0.75, 0.90), function(tau) {
     tau  = tau
   )
 
-  # Extract coefficient matrix; rows = terms, cols = Value/Std/t/p
   coefs <- summary(mod, se = "nid")$coefficients
 
-  # Isolate the Q5 row using an escaped grep on the factor term name
   q5_row <- coefs[
     grep("factor\\(income_quintile\\)5", rownames(coefs)), ,
     drop = FALSE
   ]
 
-  # Return NULL if the term is somehow absent (triggers map_dfr to skip)
   if (nrow(q5_row) == 0) return(NULL)
 
   tibble(
     quantile = tau,
-    # "Value" is the column name for the point estimate in rq summary output
     estimate = q5_row[1, "Value"],
-    # Convert log-hours coefficient to approximate % difference:
-    # (exp(beta) - 1) * 100; valid for |beta| < 0.1
     pct_diff = round((exp(q5_row[1, "Value"]) - 1) * 100, 1)
   )
 })
@@ -1112,7 +1053,7 @@ even in the extreme right tail of the distribution.
 
 The most direct test of whether agencies treat similar requests differently
 by neighborhood income is to hold complaint type exactly constant via sample
-restriction, not fixed effects, and re-run the income regression. We use 
+restriction, not fixed effects, and re-run the income regression. We use
 **Noise - Residential** because it is high-volume, routes uniformly
 to NYPD, and has a well-defined resolution process across all boroughs.
 Any remaining income effects within this type are therefore more likely
@@ -1123,10 +1064,6 @@ prioritization.
 #| label: robustness-noise
 #| cache: false
 
-# Restrict to a single complaint type so it is held exactly constant,
-# not merely controlled via a fixed effect. This makes no parametric
-# assumption about how the income effect interacts with complaint type
-# and provides the cleanest possible isolation of the income effect.
 noise_model <- lm(
   log(resolution_hours) ~ factor(income_quintile) + borough,
   data = df |> filter(complaint_type == "Noise - Residential")
@@ -1198,14 +1135,12 @@ spatial patterns would closely mirror each other.
 #| fig-cap: "Interactive choropleth maps of median household income and median 311 resolution time by census tract. Toggle layers using the control in the top-right corner. Click any tract for details."
 #| fig-height: 6
 
-# Join tract-level 311 summary stats to the ACS sf geometry object
 tract_map_sf <- nyc_income |>
   left_join(
-    tract_stats |> filter(n >= 50),   # require min. 50 requests per tract
+    tract_stats |> filter(n >= 50),
     by = c("geoid" = "geoid")
   )
 
-# Quantile-based palettes so both layers use comparable visual scales
 pal_income <- colorQuantile("YlOrRd", tract_map_sf$estimate,
                              n = 5, na.color = "#aaaaaa")
 pal_time   <- colorQuantile("Blues",  tract_map_sf$median_hours,
@@ -1213,8 +1148,6 @@ pal_time   <- colorQuantile("Blues",  tract_map_sf$median_hours,
 
 leaflet(tract_map_sf, options = leafletOptions(preferCanvas = TRUE)) |>
   addProviderTiles("CartoDB.Positron") |>
-
-  # Layer 1: Median household income
   addPolygons(
     group       = "Median household income",
     fillColor   = ~pal_income(estimate),
@@ -1235,8 +1168,6 @@ leaflet(tract_map_sf, options = leafletOptions(preferCanvas = TRUE)) |>
     position  = "bottomleft",
     labFormat = labelFormat(prefix = "$")
   ) |>
-
-  # Layer 2: Median 311 resolution time
   addPolygons(
     group       = "Median 311 resolution time",
     fillColor   = ~pal_time(median_hours),
@@ -1256,7 +1187,6 @@ leaflet(tract_map_sf, options = leafletOptions(preferCanvas = TRUE)) |>
     title    = "Resolution time quintile",
     position = "bottomright"
   ) |>
-
   addLayersControl(
     overlayGroups = c("Median household income",
                       "Median 311 resolution time"),
@@ -1266,8 +1196,8 @@ leaflet(tract_map_sf, options = leafletOptions(preferCanvas = TRUE)) |>
 
 The spatial patterns do **not** closely mirror each other. High-income
 Manhattan tracts do not uniformly show fast resolution times, and some
-lower-income Bronx and Brooklyn tracts show relatively fast resolution. 
-This is consistent with the regression finding that borough and complaint 
+lower-income Bronx and Brooklyn tracts show relatively fast resolution.
+This is consistent with the regression finding that borough and complaint
 type explain most spatial variation.[^spatial-divergence]
 
 [^spatial-divergence]: This spatial divergence between income and service
@@ -1284,11 +1214,11 @@ type explain most spatial variation.[^spatial-divergence]
 1. **Raw disparity:** Q1 tracts (lowest income) have a median resolution
    time of 8.64 hours vs. 6.06 hours for Q5 (highest income) (43% gap).
 
-2. **Complaint-mix mediation:** After controlling for complaint type 
-   and borough, income quintile coefficients drop to 1–6% in magnitude. 
-   Bootstrap CIs confirm that only Q4's effect is statistically 
-   distinguishable from zero. The raw disparity is primarily driven by 
-   *what types of problems different neighborhoods face*, not by 
+2. **Complaint-mix mediation:** After controlling for complaint type
+   and borough, income quintile coefficients drop to 1–6% in magnitude.
+   Bootstrap CIs confirm that only Q4's effect is statistically
+   distinguishable from zero. The raw disparity is primarily driven by
+   *what types of problems different neighborhoods face*, not by
    differential agency treatment within categories.
 
 3. **Within-type null result:** Restricting to "Noise - Residential"
@@ -1347,7 +1277,7 @@ agencies.[^structural-inequity]
 
 - **High-CV tracts:** `r high_cv_tracts$pct_high_cv`% of tracts have
   income estimates with CV > 50%. The quintile design substantially mitigates
-  this (see @sec-robustness-cv),but individual-tract results should be 
+  this (see @sec-robustness-cv), but individual-tract results should be
   interpreted with caution.
 
 - **Spatial join accuracy:** A small share of 311 records may be assigned

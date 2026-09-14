@@ -15,7 +15,6 @@ format:
     number-sections: true
     code-fold: true
     code-summary: "View R Code"
-    embed-resources: true
     smooth-scroll: true
     link-external-newwindow: true
     fig-cap-location: bottom
