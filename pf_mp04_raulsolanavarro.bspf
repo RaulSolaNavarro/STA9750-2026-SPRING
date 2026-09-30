@@ -1,0 +1,368 @@
+peer_feedback_assignment_1:
+  issue_number: 89
+  issue_owner: carmine-montaperto
+  issue_ok: yes
+  issue_status: OK
+  overall_comments:
+    positive: One notable strength of this submission is the model transparency achieved
+      through the "Forecast Component Breakdown" table. Rather than presenting only
+      a final number, the submission walks the reader through each multiplicative
+      and additive factor in a single structured view, showing the baseline, host
+      multiplier, new sport addition, and momentum adjustment side by side for all
+      four medal types. This is particularly effective for the stated audience of
+      a fundraising and marketing team, because it gives non-technical readers a clear
+      and defensible story to tell sponsors without requiring them to understand the
+      underlying statistical machinery. It also reflects well on the analytical integrity
+      of the submission, since a transparent model is easier to critique and improve
+      than one that obscures its assumptions.
+    negative: One area where the submission could be improved is the connection between
+      the data acquisition work and the statistical inputs to the forecast model.
+      The assignment specifically asks for formal confidence intervals derived from
+      the scraped Olympedia data using infer package functions, with those intervals
+      then propagated through the Monte Carlo simulation to produce the final forecast
+      range. In this submission, the host effect multiplier and the new sport probability
+      estimates appear to be set by judgment rather than estimated from the data,
+      which means the extensive scraping and cleaning work does not fully feed into
+      the inferential core of the model. Strengthening this connection, by explicitly
+      running t_test() or prop_test() calls on the historical host and new sport data
+      and carrying those intervals forward into the simulation, would make the analysis
+      more rigorous and would also more directly satisfy the requirements of Tasks
+      4 and 5.
+    advice: |-
+      Minor refinements:
+      - Replace the hard-coded 2024 fallback medal counts with a note or warning that flags when the scrape has failed, rather than silently substituting fixed values
+      - Add brief inline comments in the longer analytical chunks explaining the reasoning behind key modeling decisions, not just what the code is doing
+  scores:
+    Written Communication:
+      score: 8.0
+      comment: The report is well-written, with no noticeable grammatical issues.
+        The framing around a sponsor audience is consistent and the motivation for
+        each modeling choice is explained without excessive technical detail. The
+        "Limitations" and "Conclusion" sections in particular do a good job of contextualizing
+        the forecast in terms a marketing executive could act on. The main area for
+        improvement is that certain sections, especially around the extra credit work,
+        read more like a technical appendix than integrated narrative, which somewhat
+        weakens the overall flow of the document as a fundraising brief.
+    Project Skeleton:
+      score: 8.0
+      comment: 'The submission covers all major components of the project and demonstrates
+        a clear understanding of the three-factor forecasting framework. The extra
+        credit work is well-integrated, which reflects positively on the overall structure.
+        However, two specific requirements from the skeleton stand out as incompletely
+        addressed: the 12-finding EDA requirement from Task 3 is not explicitly met
+        in the rendered output, and Task 4''s instruction to use infer package functions
+        is not visibly fulfilled.'
+    Tables & Document Presentation:
+      score: 8.0
+      comment: Tables across the report are well-formatted, with appropriate titles,
+        clean column labels, and sensible rounding throughout. The use of gt() is
+        consistent and the tables integrate naturally into the narrative rather than
+        feeling like data dumps. The "Forecast Component Breakdown" table stands out
+        as a particularly effective design choice that communicates the model structure
+        in a way a non-technical reader can follow. The submission could use more
+        advanced formatting features such as row highlighting, color scales, or summary
+        to the rows that draw attention to the sponsor-relevant numbers.
+    Data Visualization:
+      score: 7.0
+      comment: The visualizations are consistent and themed. The forecast trend plot
+        with the validation-based error bar range is the strongest figure in the report,
+        effectively communicating both the historical baseline and the 2028 projection
+        in a single view. The sport strength chart is clean and readable but fairly
+        standard in structure. To move into the "Great" range, the submission would
+        benefit from at least one figure that uses an extension package, interactivity,
+        or a less conventional plot type that adds analytical depth beyond what a
+        default ggplot2 call produces.
+    Exploratory Data Analysis:
+      score: 6.0
+      comment: The submission contains EDA-adjacent content distributed across several
+        sections, and the baseline performance analysis does a reasonable job of characterizing
+        Team USA's modern medal history. However, the EDA does not read as a genuine
+        exploratory process and falls short of the 12-finding requirement specified
+        in Task 3. The analysis moves quickly from data acquisition to forecasting
+        without pausing to document irregularities, probe variation across countries
+        or years, or surface any non-obvious patterns that could enrich the model
+        or the narrative.
+    Code Quality:
+      score: 7.0
+      comment: The code is well-organized at a high level. The use of map() and unnest()
+        for iterative scraping is appropriate and cleanly executed. The main areas
+        for improvement are comment depth and function decomposition, particularly
+        in the longer analytical chunks where multiple distinct steps are handled
+        together without clear separation or explanation, as I found myself slowing
+        down to infer the reasoning behind specific modeling decisions.
+    Data Preparation:
+      score: 8.0
+      comment: The data preparation pipeline is well-constructed and reflects a clear
+        understanding of automated, reproducible data acquisition. The caching system
+        in particular is a strong design choice that makes the workflow both polite
+        to the data source and efficient for repeated rendering. The country code
+        standardization is functional but could be more thoroughly documented, and
+        the hard-coded 2024 fallback values introduce a minor reproducibility risk
+        that would ideally be flagged or handled differently. Overall the pipeline
+        is clean and largely robust, falling just short of the top range due to those
+        small gaps in completeness and documentation.
+    Analysis and Findings:
+      score: 7.0
+      comment: The analysis produces a coherent and defensible forecast that is well
+        within a plausible range for Team USA's 2028 performance. The model structure
+        is transparent and the component breakdown table communicates the logic clearly
+        to a non-technical audience. The main analytical weakness is that two of the
+        three factors, the host effect and the new sport effect, rely more on assumed
+        or judgment-based values than on formal statistical estimates derived from
+        the scraped data, which is what the assignment asks for. Closing that gap
+        between the data acquisition work and the inferential inputs to the forecast
+        model would meaningfully strengthen this section.
+    Extra Credit:
+      score: 5.0
+      comment: The submission makes a largely successful attempt at all three extra
+        credit opportunities. The model validation work is particularly strong and
+        integrates cleanly into the final forecast. The momentum factor addition is
+        well-justified and transparently presented. The bootstrap section is functional
+        and produces a reasonable interval, but does not fully engage with the infer-based
+        approach specified in the extra credit prompt, which keeps it from earning
+        full marks on that component.
+  mp_number: 4.0
+peer_feedback_assignment_2:
+  issue_number: 94
+  issue_owner: kevmarcel0
+  issue_ok: yes
+  issue_status: OK
+  overall_comments:
+    positive: One notable strength of this submission is the decision to analyze gold
+      medal share rather than raw gold medal counts throughout the core analysis.
+      By normalizing medal outcomes against the total number of events at each games,
+      the submission avoids a systematic bias that affects most raw-count analyses,
+      namely that the steady growth in the Olympic program from around 43 events in
+      1896 to over 300 in 2024 makes direct year-to-year comparisons misleading without
+      adjustment. This choice surfaces in the baseline trend model, the host effect
+      bonus calculation, and the geospatial visualizations, and it reflects the kind
+      of analytical judgment that distinguishes a thoughtful data analyst from one
+      who simply computes the most obvious summary statistic. It also makes the host
+      effect estimate more defensible, since the share-based bonus controls for the
+      fact that different host nations operate at very different baseline medal levels.
+    negative: One area where the submission could be improved is the final fundraising
+      deliverable in Task 6. The assignment asks for a polished two-page sponsor-facing
+      brief that interprets the three-factor model for a marketing executive audience,
+      but the Task 6 section in this submission is relatively thin, consisting primarily
+      of a forecast table, a short paragraph about the host effect, a visualization,
+      and a brief caveats list. The analytical work that precedes it is strong enough
+      to support a much more compelling sponsor narrative, covering topics like which
+      specific sports drive the new sport upside, how Team USA's home performance
+      history compares to other host nations, and what the forecast range means in
+      practical terms for a sponsor evaluating their investment. As it stands, a fundraising
+      professional reading only Task 6 would not have enough context to speak confidently
+      about the forecast to a potential corporate sponsor, which is the stated goal
+      of the deliverable.
+    advice: |-
+      Minor refinements:
+      - Replace the raw broom::tidy() output tables in Analysis 1 and Analysis 2 with curated summary tables that present only the most relevant statistics for a general reader
+      - Add brief transition sentences between the analytical sections and Task 6 to help the reader understand how each analysis feeds into the final forecast number
+  scores:
+    Written Communication:
+      score: 7.0
+      comment: The writing is competent and clear, with no notable grammatical issues
+        and a logical flow from data acquisition through to the final forecast. The
+        technical sections are well-labeled and the caveats demonstrate intellectual
+        honesty about the model's limitations. The main weakness is that the report
+        does not fully commit to the fundraising brief format specified by the assignment,
+        with the sponsor-facing sections feeling underwritten relative to the depth
+        of the analytical work that precedes them. A reader from a marketing or fundraising
+        background would need more narrative context to use this report confidently.
+    Project Skeleton:
+      score: 9.0
+      comment: This submission follows the project skeleton more closely and explicitly
+        than most, with each task clearly demarcated and the required methodology
+        visibly implemented at each step. The use of infer package functions in Task
+        4 and the direct propagation of those intervals into the Monte Carlo simulation
+        in Task 5 is exactly what the assignment asks for, and the connection between
+        those two tasks is clear and well-executed. The main gap is in Task 6, where
+        the fundraising deliverable does not fully develop into the two-page sponsor
+        brief the assignment describes, and no extra credit work is attempted.
+    Tables & Document Presentation:
+      score: 8.0
+      comment: The tables in this submission are consistently well-formatted and reflect
+        genuine effort to present data in a reader-friendly way. The conditional highlighting
+        used in several key tables is a clear step above basic gt defaults and demonstrates
+        awareness of how formatting can serve the narrative. The main area for improvement
+        is in the more technical tables toward the end of the report, where raw model
+        output is presented with minimal curation, which sits closer to exploratory
+        quality than the polished standard set by the earlier tables in the document.
+    Data Visualization:
+      score: 8.0
+      comment: The visualizations in this submission are above average and include
+        several figures that demonstrate genuine creativity and technical range. The
+        Monte Carlo histogram and the three-factor segment plot in particular stand
+        out as sponsor-friendly visuals that communicate both the point estimate and
+        the uncertainty in an accessible way. The use of ggrepel and confidence ribbons
+        shows familiarity with tools beyond the core ggplot2 defaults. The submission
+        would benefit from at least one interactive figure or a more unconventional
+        plot type that adds analytical depth not achievable with standard geometry.
+    Exploratory Data Analysis:
+      score: 9.0
+      comment: This is one of the stronger EDA sections in this submission pool, with
+        all 12 findings present, clearly labeled, and distributed across the three
+        required effects. The decision to analyze gold medal share rather than raw
+        counts is a good example of the kind of pattern recognition that distinguishes
+        solid EDA from a simple data summary. The finding that all 14 hosting occasions
+        since 1960 showed improvement in gold count is the most analytically interesting
+        result and is appropriately highlighted. The main area for improvement is
+        that the final few findings feel somewhat routine compared to the stronger
+        work earlier in the section.
+    Code Quality:
+      score: 9.0
+      comment: The code in this submission has a strong function decomposition, consistent
+        naming conventions, and defensive error handling. The scraping pipeline in
+        particular is well-architected, with each parsing function handling a distinct
+        responsibility and the results assembled cleanly through a series of joins.
+        The main area for improvement is comment depth in the analytical sections,
+        where a reader following the modeling logic for the first time would occasionally
+        benefit from a brief explanation of why a particular approach was chosen rather
+        than simply what the code is doing.
+    Data Preparation:
+      score: 9.0
+      comment: The data preparation pipeline in this submission is thorough, well-documented,
+        and reflects a clear understanding of the challenges involved in standardizing
+        Olympic historical data across different coding systems. The comprehensive
+        NOC-to-ISO lookup, the explicit anti_join() verification step, and the transparent
+        handling of pseudo and historical codes all reflect best practices that go
+        beyond what most submissions achieve. The one gap is that a small number of
+        resolvable mismatches remain in the final output, which could be addressed
+        with an extension of the existing mapping table.
+    Analysis and Findings:
+      score: 9.0
+      comment: This submission produces a data-driven with all three model factors
+        estimated from the scraped data and the uncertainty in each factor correctly
+        propagated through to the final forecast. The connection between the statistical
+        inference in Task 4 and the Monte Carlo simulation in Task 5 is explicit and
+        traceable. The main limitation is that the resulting confidence interval is
+        very wide, reflecting genuine uncertainty in the host effect estimate that
+        is driven partly by the 1984 outlier, and the submission would benefit from
+        a brief discussion of how a sponsor should interpret and act on a range that
+        spans more than 150 gold medals.
+    Extra Credit:
+      score: 0.0
+      comment: None of the EC sections are present.
+  mp_number: 4.0
+peer_feedback_assignment_3:
+  issue_number: 99
+  issue_owner: khushwant-khatri590
+  issue_ok: yes
+  issue_status: OK
+  overall_comments:
+    positive: One notable strength of this submission is the correct and complete
+      implementation of the data acquisition pipeline. The three-step structure separating
+      editions, disciplines, and medal tables into distinct functions is logically
+      sound and closely follows the assignment's recommended approach, and the use
+      of possibly() for error handling in the scraping functions shows genuine awareness
+      of the challenges involved in large-scale web scraping.
+    negative: One area where the submission could be improved is the connection between
+      the statistical inference in Task 4 and the Monte Carlo simulation in Task 5.
+      The assignment specifically asks for confidence intervals derived from the data
+      to be propagated forward into the simulation, so that the forecast range reflects
+      actual statistical uncertainty estimated from historical Olympic results. In
+      this submission, the host effect parameter is set using a USA-only fallback
+      comparison rather than a general host nation estimate, and the new sport probability
+      is hardcoded at 0.15 rather than drawn from the prop_test() confidence interval
+      produced just a few code chunks earlier. This means the simulation is not actually
+      combining the three confidence intervals as the assignment instructs, and the
+      forecast range does not reflect the uncertainty captured in the Task 4 inference
+      work.
+    advice: |-
+      Minor refinements:
+      - Filter the infer output tables in Task 4 to show only the estimate and confidence interval columns, removing raw test statistics and degrees of freedom that would not be meaningful to a sponsor audience
+      - Add a brief interpretation sentence after each statistical test result explaining what the number means in plain language before moving to the next analysis step
+  scores:
+    Written Communication:
+      score: 5.0
+      comment: The report covers the required topics but reads more like a technical
+        log than a polished analytical document. Section transitions are minimal,
+        findings are stated without sufficient context or narrative motivation, and
+        the fundraising brief does not develop a compelling sponsor-facing story beyond
+        a few bullet points. The writing is grammatically clean but lacks the interpretive
+        prose that would help a non-technical reader understand why each analytical
+        step matters. The EDA findings summary is the clearest example of this gap,
+        presenting a table of placeholder-level statements rather than genuine observations
+        drawn from the data.
+    Project Skeleton:
+      score: 6.0
+      comment: 'The submission completes the structural requirements at a surface
+        level, with all six tasks present and the core pipeline intact. The use of
+        infer package functions in Task 4 is correct, but the connection between those
+        results and the Monte Carlo simulation in Task 5 is broken in two key places:
+        the host effect uses a USA-only fallback rather than a general host nation
+        estimate, and the new sport probability is set by assumption rather than drawn
+        from the Task 4 confidence interval. These gaps meaningfully reduce the analytical
+        value of the forecast even though the scaffolding is in place.'
+    Tables & Document Presentation:
+      score: 5.0
+      comment: Tables are consistently formatted using gt() and meet a basic standard
+        of readability, but most present more raw output than necessary for the intended
+        audience. The inclusion of statistical test metadata such as degrees of freedom
+        and chi-squared statistics in sponsor-facing tables reflects a lack of curation
+        that would undermine confidence in a real fundraising context. The EDA findings
+        table is the weakest element, functioning as a placeholder rather than a genuine
+        data summary. To reach the "Good" range, the submission would need to filter
+        and reformat its tables to present only the most relevant information for
+        each stated purpose.
+    Data Visualization:
+      score: 5.0
+      comment: The visualizations in this submission are functional but reflect minimal
+        effort to go beyond default ggplot2 settings. Each figure has a title and
+        axis labels, which meets an exploratory standard, but none reach publication
+        quality in terms of annotation, color design, or structural choice. The Monte
+        Carlo histogram is the most analytically useful figure but lacks the density
+        overlay, mean annotation, and confidence interval markers that would make
+        it sponsor-ready. The absence of a historical trend chart showing the 2028
+        forecast in context is a notable gap given that such a figure would be the
+        natural centerpiece of the fundraising deliverable.
+    Exploratory Data Analysis:
+      score: 3.0
+      comment: The EDA section satisfies the numerical requirement of 12 findings
+        but does not satisfy the analytical intent behind that requirement. The findings
+        table reads as a list of topic labels rather than a record of what was actually
+        discovered in the data, with entries that could have been written before any
+        data was examined. The visualizations cover the right subject areas but do
+        not go beyond surface-level summaries, and no unexpected patterns or data
+        irregularities are noted anywhere in the section. This is the weakest section
+        of the submission and represents the largest single gap relative to the rubric's
+        expectations.
+    Code Quality:
+      score: 6.0
+      comment: The code is clean and readable at a surface level, with consistent
+        naming conventions and appropriate use of tidyverse idioms throughout. The
+        possibly() wrapper for scraping errors is a thoughtful touch that reflects
+        awareness of defensive programming principles. The main weaknesses are in
+        the analytical chunks, where multiple distinct steps are handled together
+        without comments or clear internal structure, and in the Monte Carlo section,
+        where the relationship between the simulation parameters and the confidence
+        intervals from Task 4 is not made explicit in the code.
+    Data Preparation:
+      score: 6.0
+      comment: The data preparation pipeline is correctly structured and the caching
+        and rate-limiting workflow is properly implemented. The decision to show the
+        anti_join() output transparently is good practice, but identifying 69 unmatched
+        codes and resolving only two of them represents a significant gap in the cleaning
+        step that affects downstream analysis. The host code extraction issue is acknowledged
+        but not resolved, and the fallback to USA-only host years for the host effect
+        analysis is a direct consequence of that unresolved data quality problem.
+        Extending the country code mapping to cover the most common mismatches would
+        substantially improve this section.
+    Analysis and Findings:
+      score: 4.0
+      comment: The analysis produces a forecast in a plausible range and follows the
+        correct structural approach, but two of the three model factors are not estimated
+        in the way the assignment specifies. The host effect is measured only for
+        Team USA rather than across all host nations, which produces an inflated and
+        less generalizable estimate, and the new sport probability is assumed rather
+        than derived from the data. These gaps mean that the extensive scraping and
+        cleaning work done earlier in the submission does not fully feed into the
+        inferential core of the model, which is the central analytical task of the
+        project. Addressing those two gaps would substantially strengthen the forecast
+        and better connect the data acquisition work to the final deliverable.
+    Extra Credit:
+      score: 1.0
+      comment: 'One extra credit opportunity is attempted, corresponding loosely to
+        Extra Credit #02 for model improvement.'
+  mp_number: 4.0
+evaluator: raulsolanavarro
+

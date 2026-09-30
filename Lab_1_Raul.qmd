@@ -1,0 +1,75 @@
+---
+title: "Housing Market in Texas"
+author: "Raul J Sola Navarro"
+format: revealjs
+---
+
+## Home Sales Reach 15yr. Low
+
+```{r}
+if(!require("tidyverse")) install.packages("tidyverse")
+library(tidyverse)
+txhousing |> 
+  filter(city=="Houston") |> 
+  group_by(year) |> 
+  summarize(sales=sum(sales)) |> 
+  ggplot(aes(x=year, y=sales)) + 
+    geom_line() + 
+    ggtitle("Annual Houses Sold in Houston, TX")
+```
+
+## Average Home Price in Houston, TX is Climbing
+
+```{r}
+if(!require("tidyverse")) install.packages("tidyverse")
+library(tidyverse)
+txhousing |> 
+   filter(city=="Houston") |> 
+    group_by(month) |> 
+    summarize(avg_price=sum(volume) / sum(sales)) |> 
+    mutate(month=factor(month.abb[month], 
+                 levels=month.abb, ordered=TRUE)) |>
+    ggplot(aes(x=month, y=avg_price)) + 
+    geom_bar(stat="identity") + 
+    ggtitle("Average Price of Houses Sold in Texas by Month") + 
+    xlab("Month") + 
+    ylab("Average Sale Price") + 
+    scale_y_continuous(labels = scales::dollar)
+```
+
+## Home Prices in Collin County and Austin Lead the State
+
+```{r}
+if(!require("tidyverse")) install.packages("tidyverse")
+library(tidyverse)
+txhousing |> filter(year==2015) |> 
+    group_by(city) |> 
+    summarize(avg_price=sum(volume) / sum(sales),
+              num_sales=sum(sales)) |> 
+    slice_max(num_sales, n=10) |>
+    ggplot(aes(x=city, y=avg_price)) + 
+    geom_bar(stat="identity") + 
+    ggtitle("Average Price of Houses Sold in 2015 by City in Texas") + 
+    xlab("City") + 
+    ylab("Average Sale Price") + 
+    scale_y_continuous(labels = scales::dollar)
+```
+
+## Housing Market Analysis
+::: {.fragment}
+- The housing market in Texas has experienced a significant decline in home sales, reaching a 15-year low. This trend is evident in the annual sales data for Houston, which shows a consistent decrease over the years.
+:::
+::: {.fragment}
+- Despite the decline in sales, the average home price in Houston has been climbing. This suggests that while fewer homes are being sold, those that are sold are fetching higher prices, possibly due to increased demand or limited supply.
+:::
+## Housing Market Analysis cont...
+::: {.fragment}
+- When looking at the average home prices across different cities in Texas for the year 2015, Collin County and Austin stand out as having the highest average prices. This could be attributed to factors such as economic growth, job opportunities, and overall desirability of these locations.
+:::
+::: {.fragment}
+- The data indicates a complex housing market in Texas, where declining sales coexist with rising prices. This could have implications for both buyers and sellers, as well as for policymakers who need to address issues of housing affordability and availability.
+:::
+## Housing Market Analysis cont...
+::: {.fragment}
+- Overall, the housing market in Texas is showing signs of stress, with fewer transactions occurring but at higher price points. This could lead to challenges for potential home buyers and may require strategic interventions to ensure a balanced and accessible housing market in the state.
+:::
