@@ -104,6 +104,7 @@ country code from each row's flag image URL.
 
 ```{r scrape-editions}
 #| label: scrape-editions
+#| cache: false
 
 parse_editions <- function() {
   page <- read_olympedia("editions")
@@ -160,25 +161,27 @@ Winter Games. The table below summarizes coverage by season.
 #| label: editions-display
 
 editions |>
+  filter((season == "Summer" & year <= 2024) | (season == "Winter" & year <= 2022)) |>
   group_by(season) |>
   summarise(
-    Games             = n(),
-    `First Year`      = min(year),
-    `Last Year`       = max(year),
-    `Unique Hosts`    = n_distinct(host_code),
-    .groups           = "drop"
+    Games          = n(),
+    `First Year`   = min(year),
+    `Last Year`    = max(year),
+    `Unique Hosts` = n_distinct(host_code),
+    .groups        = "drop"
   ) |>
   gt() |>
   tab_header(
     title    = "Olympic Editions Scraped from Olympedia",
-    subtitle = "Summer and Winter Games from 1896 to present"
+    subtitle = "Summer Games through 2024, Winter Games through 2022"
   ) |>
   cols_label(season = "Season") |>
   tab_style(
     style     = cell_fill(color = "#f7f5ee"),
     locations = cells_body(rows = season == "Summer")
   ) |>
-  fmt_integer(columns = where(is.numeric))
+  fmt_integer(columns = c(Games, `Unique Hosts`)) |>
+  fmt_integer(columns = c(`First Year`, `Last Year`), use_seps = FALSE)
 ```
 
 ## 1.3 Sports per Edition
@@ -189,6 +192,7 @@ under a minute after the initial download.
 
 ```{r scrape-sports}
 #| label: scrape-sports
+#| cache: false
 
 parse_sports_for_edition <- function(eid) {
   page <- read_olympedia(glue("editions/{eid}"))
@@ -223,21 +227,28 @@ events than 2024.
 
 ```{r sports-display}
 #| label: sports-display
-#| fig-cap: "The Summer Olympic program has expanded from 10 disciplines in 1896 to nearly 50 today."
+#| cache: false
+#| fig-cap: "Summer Olympic medal disciplines by year. The program peaked early in 1900 (50 disciplines), contracted mid-century, and has grown steadily since 1960. Gaps reflect WWI (1916) and WWII (1940 and 1944) cancellations."
 
 sports_by_edition |>
   left_join(editions |> select(edition_id, year, season), by = "edition_id") |>
-  filter(season == "Summer") |>
+  filter(season == "Summer", !is.na(year), year <= 2024) |>
   group_by(year) |>
   summarise(n_sports = n(), .groups = "drop") |>
   ggplot(aes(x = year, y = n_sports)) +
   geom_col(fill = "#1a1a2e", alpha = 0.85) +
   geom_smooth(method = "loess", se = FALSE, colour = "#c9a84c",
               linewidth = 1.2) +
+  annotate("text", x = 1916, y = 15,
+           label = "WWI\n(1916\ncancelled)",
+           colour = "grey50", size = 2.5, hjust = 0.5) +
+  annotate("text", x = 1942, y = 15,
+           label = "WWII\n(1940 & 1944\ncancelled)",
+           colour = "grey50", size = 2.5, hjust = 0.5) +
   labs(
     title   = "Number of Medal Disciplines at Each Summer Olympics",
     x       = "Year", y = "Number of Disciplines",
-    caption = "Source: Olympedia"
+    caption = "Source: Olympedia. 1904 excluded due to data quality issues."
   ) +
   theme_minimal(base_size = 12) +
   theme(plot.title = element_text(face = "bold"))
@@ -304,7 +315,6 @@ medals_full |>
   summarise(
     Countries   = n_distinct(country_code),
     Disciplines = n_distinct(sport_name),
-    Records     = n(),
     .groups     = "drop"
   ) |>
   arrange(desc(year)) |>
@@ -321,12 +331,12 @@ medals_full |>
   cols_label(
     year        = "Year",
     Countries   = "Countries",
-    Disciplines = "Disciplines",
-    Records     = "Table Rows"
+    Disciplines = "Disciplines"
   ) |>
-  fmt_integer(columns = everything()) |>
+  fmt_integer(columns = year, use_seps = FALSE) |>
+  fmt_integer(columns = c(Countries, Disciplines)) |>
   data_color(
-    columns = Records,
+    columns = Disciplines,
     palette = c("#f7f7f7", "#1a1a2e")
   )
 ```
@@ -386,6 +396,11 @@ dropped_codes |>
   ) |>
   cols_label(country_code = "IOC Code", n = "Rows Affected") |>
   fmt_integer(columns = n) |>
+  cols_width(
+    country_code ~ px(150),
+    n            ~ px(150)
+  ) |>
+  tab_options(table.width = px(350)) |>
   tab_footnote(
     footnote  = paste(
       "MIX = Mixed teams; IOA/AIN/EOR = Individual Olympic Athletes;",
@@ -447,9 +462,6 @@ ggplot(world_gold) +
 ```{r eda-us-setup}
 #| label: eda-us-setup
 
-# The 1904 St. Louis Games are a known data quality issue. US club teams
-# competed as separate delegations, inflating the count to 164 golds.
-# We keep the record but exclude 1904 from baseline calculations.
 us_summer <- medals_clean |>
   filter(country_code == "USA", season == "Summer") |>
   group_by(year) |>
@@ -499,7 +511,8 @@ us_summer |>
     bronze = "Bronze", total = "Total", note = "Note"
   ) |>
   data_color(columns = gold, palette = c("white", "#c9a84c")) |>
-  fmt_integer(columns = c(year, gold, silver, bronze, total)) |>
+  fmt_integer(columns = year, use_seps = FALSE) |>
+  fmt_integer(columns = c(gold, silver, bronze, total)) |>
   tab_style(
     style     = cell_text(color = "grey50", style = "italic"),
     locations = cells_body(columns = note)
@@ -633,8 +646,8 @@ host_effect |>
     host_gold_hosting = "Host Year",
     pct_increase_gold = "% Change"
   ) |>
+  fmt_integer(columns = year, use_seps = FALSE) |>
   fmt_number(columns = pct_increase_gold, decimals = 1) |>
-  cols_label(pct_increase_gold = "% Change") |>
   fmt_integer(columns = c(prior_gold, host_gold_hosting)) |>
   data_color(
     columns = pct_increase_gold,
@@ -746,8 +759,9 @@ new_sport_medals |>
     subtitle = "Each row represents one host Summer Olympics"
   ) |>
   cols_label(year = "Year", host_code = "Host") |>
+  fmt_integer(columns = year, use_seps = FALSE) |>
   fmt_percent(columns = `Win Rate`, decimals = 0) |>
-  fmt_integer(columns = c(year, `New Sports`, `Golds Won`)) |>
+  fmt_integer(columns = c(`New Sports`, `Golds Won`)) |>
   data_color(columns = `Win Rate`, palette = c("#f7f7f7", "#c9a84c"))
 ```
 
@@ -870,8 +884,6 @@ the analysis relevant to 2028 conditions.
 #| label: inference-setup
 
 CUTOFF_YEAR           <- 1960
-# Exclude 1980 (US boycott of Moscow) and 1984 (Soviet boycott of LA)
-# Both years are outliers that distort the baseline and host effect estimates
 BOYCOTT_YEARS         <- c(1980, 1984)
 us_summer_recent      <- us_summer |>
   filter(year >= CUTOFF_YEAR, !year %in% BOYCOTT_YEARS)
@@ -1229,10 +1241,6 @@ avg_gdp_pc <- medals_with_gdp |>
 
 gdp_coef <- gdp_summary |> filter(term == "log(gdp_pc)") |> pull(estimate)
 
-# GDP multiplier: compare the US to the median GDP of past Summer host nations.
-# We compute this directly from gdp_matched + summer_hosts to avoid a
-# dependency on the validation_hosts object (which is built later in EC3).
-# Get ISO codes for host nations so we can join to gdp_matched
 host_iso <- medals_clean |>
   filter(season == "Summer") |>
   distinct(country_code, iso_code)
@@ -1248,8 +1256,6 @@ past_hosts <- summer_hosts |>
 
 median_host_gdp_pc <- median(past_hosts$gdp_pc, na.rm = TRUE)
 
-# Cap the multiplier at 1.10 (10% boost) to reflect the diminishing returns
-# of wealth at the very top of the income distribution
 gdp_multiplier <- min(1.10,
   exp(gdp_coef * (log(us_gdp_pc) - log(median_host_gdp_pc))))
 ```
@@ -1312,7 +1318,7 @@ LA 2028, with a 95% confidence interval of
 
 ```{r monte-carlo-display}
 #| label: monte-carlo-display
-#| fig-cap: "Monte Carlo simulation output. The solid red line is the median; dashed lines mark the 95% interval."
+#| fig-cap: "Monte Carlo simulation output. The solid line is the median; dashed lines mark the 95% interval."
 
 tibble(golds = predicted_gold_draws) |>
   ggplot(aes(x = golds)) +
@@ -1355,8 +1361,6 @@ validation_hosts <- host_effect |>
   ) |>
   filter(!is.na(gdp_pc)) |>
   mutate(
-    # For validation, use the simple host-effect model without GDP to avoid
-    # double-counting (the baseline already reflects each country's wealth level)
     predicted = prior_gold * (1 + avg_host_increase / 100),
     actual    = host_gold_hosting,
     abs_error = abs(predicted - actual),
@@ -1390,7 +1394,8 @@ validation_hosts |>
     abs_error  = "Abs. Error",
     pct_error  = "% Error"
   ) |>
-  fmt_integer(columns = c(year, prior_gold, actual)) |>
+  fmt_integer(columns = year, use_seps = FALSE) |>
+  fmt_integer(columns = c(prior_gold, actual)) |>
   fmt_number(columns = c(predicted, abs_error), decimals = 1) |>
   fmt_number(columns = pct_error, decimals = 1, suffix = "%") |>
   data_color(columns = abs_error, palette = c("#1a1a2e", "#f7f7f7", "#c9a84c"))
