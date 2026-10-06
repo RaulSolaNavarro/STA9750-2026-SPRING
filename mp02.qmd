@@ -1,7 +1,11 @@
 ---
 title: "STA 9750 Mini-Project #02: How Do You Do 'You Do You'?"
 author: "Raúl J. Solá Navarro"
-date: today
+date: "2026-04-03"
+date-modified: "2026-10-06"
+language:
+  title-block-published: "Originally Published"
+  title-block-modified: "Republished"
 format:
   html:
     toc: true
@@ -9,7 +13,7 @@ format:
     toc-title: "Contents"
     code-fold: true
     code-summary: "View R Code"
-    self-contained: true
+    embed-resources: true
     theme: flatly
     mainfont: "Georgia"
     fontsize: 1.05em
@@ -26,6 +30,32 @@ demographic groups spend their days. We then apply these findings to design
 time-use profiles for a new time-tracking app targeting specific user 
 demographics.
 
+::: {.callout-note title="Republication note (October 6, 2026)" collapse="true"}
+This report was first published on April 3, 2026. It was republished on 
+October 6, 2026 after an audit of the analysis code found errors that changed 
+several results. Every table, chart, and number below was regenerated. The 
+main corrections:
+
+- **Employment status** now follows the BLS definitions of the ATUS labor 
+  force variable. Previously, "not in labor force" was labeled "retired", and 
+  unemployed respondents were labeled "not employed" in the stay-at-home dad 
+  and career-changer groups.
+- **Child care** now uses the ATUS categories for caring for household 
+  children. Previously, a text filter matched "Personal Care" (mostly sleep) 
+  instead.
+- **Averages are per respondent per day**, including respondents who did not 
+  do the activity. Several tables previously averaged the length of each 
+  logged activity instead.
+- **Respondent demographics** are now linked using the ATUS person line number 
+  and validated against the ATUS roster.
+- **Profile targets** now have a stated direction (a minimum or a limit) set 
+  near what peers actually do, and the table reports the share of the group 
+  that meets each target. The stay-at-home dad group is defined more tightly.
+- **Smaller fixes:** transit location codes, the diary month used for the 
+  summer analysis, college enrollment, the sports count, and combined 
+  multi-year activity codes that were previously dropped.
+:::
+
 ## Data Acquisition
 
 <!-- Task 1, 2 and 3: Data Acquisition, Cleaning, and Merging -->
@@ -37,7 +67,6 @@ demographics.
 
 library(tidyverse)
 library(glue)
-library(readxl)
 library(httr2)
 library(gt)
 library(scales)
@@ -50,7 +79,6 @@ library(ggforce)
 #| label: load-functions
 #| message: false
 #| warning: false
-#| cache: true
 
 load_atus_data <- function(file_base = c("resp", "rost", "act", "cps")){
     if(!dir.exists(file.path("data", "mp02"))){
@@ -84,6 +112,10 @@ load_atus_data <- function(file_base = c("resp", "rost", "act", "cps")){
     
     file <- read_csv(file_name_out, show_col_types = FALSE)
     
+    # The original ALL-CAPS BLS columns are dropped; only the renamed or newly
+    # created (not all-caps) columns are kept.
+    keep_new_columns <- function(df) select(df, !matches("^[A-Z0-9_]+$", ignore.case = FALSE))
+    
     switch(file_base,
         cps = file |>
             rename(participant_id = TUCASEID) |>
@@ -97,20 +129,41 @@ load_atus_data <- function(file_base = c("resp", "rost", "act", "cps")){
             ) |>
             mutate(
                 n_children = TRCHILDNUM,
+                # Household composition (BLS: TRYHHCHILD = age of youngest household
+                # child under 18, TRSPPRES = 1 spouse present, TESPEMPNOT = 1 spouse
+                # employed / 2 not employed)
+                youngest_child_age = if_else(TRYHHCHILD >= 0, as.numeric(TRYHHCHILD), NA_real_),
+                spouse_present     = TRSPPRES == 1,
+                spouse_employed    = case_match(TESPEMPNOT, 1 ~ TRUE, 2 ~ FALSE, .default = NA),
+                # BLS definition of TELFS (labor force status)
                 employment_status = case_match(TELFS,
-                    1 ~ "Employed - Full Time",
-                    2 ~ "Employed - Part Time",
-                    3 ~ "Not Employed - Looking",
-                    4 ~ "Not Employed - Not Looking",
-                    5 ~ "Retired",
+                    1 ~ "Employed - at work",
+                    2 ~ "Employed - absent",
+                    3 ~ "Unemployed - on layoff",
+                    4 ~ "Unemployed - looking",
+                    5 ~ "Not in labor force",
                     .default = NA_character_),
-                enrolled_in_college = TESCHENR == 1
+                # Full/part time is only defined for the employed
+                work_time = case_match(TRDPFTPT,
+                    1 ~ "Full time",
+                    2 ~ "Part time",
+                    .default = NA_character_),
+                # TESCHENR covers high school AND college; TESCHLVL tells them apart
+                enrolled_in_school  = TESCHENR == 1,
+                enrolled_in_college = TESCHENR == 1 & TESCHLVL == 2,
+                # Actual diary date (the CPS month is 2 to 5 months earlier)
+                diary_date  = ymd(TUDIARYDATE),
+                diary_month = month(diary_date)
             ) |>
-            select(matches("[:lower:]", ignore.case = FALSE)),
+            keep_new_columns(),
         rost = file |>
             rename(participant_id = TUCASEID) |>
-            mutate(sex = case_match(TESEX, 1 ~ "M", 2 ~ "F")) |>
-            select(matches("[:lower:]", ignore.case = FALSE)),
+            mutate(
+                sex         = case_match(TESEX, 1 ~ "M", 2 ~ "F"),
+                roster_line = TULINENO,
+                roster_age  = TEAGE
+            ) |>
+            keep_new_columns(),
         act = file |>
             rename(participant_id = TUCASEID) |>
             mutate(
@@ -120,10 +173,12 @@ load_atus_data <- function(file_base = c("resp", "rost", "act", "cps")){
                 stop_time         = TUSTOPTIME,
                 level1_code       = paste0(TRTIER1P, "0000"),
                 level2_code       = paste0(TRTIER2P, "00"),
-                level3_code       = TRCODEP,
+                # Six-digit activity code as text, so it matches the lexicon whether
+                # readr reads the column as text (leading zeros) or as a number
+                level3_code       = sprintf("%06d", as.integer(TRCODEP)),
                 location_code     = TEWHERE
             ) |>
-            select(matches("[:lower:]", ignore.case = FALSE))
+            keep_new_columns()
     )
 }
 
@@ -143,7 +198,10 @@ load_atus_activities <- function(){
         )
     }
     
-    read_csv(dest_file, show_col_types = FALSE)
+    # Six-digit activity code as text (same format as the activity file)
+    read_csv(dest_file, show_col_types = FALSE) |>
+        mutate(code_level2 = sprintf("%06d", as.integer(code_level2)),
+               code_level3 = sprintf("%06d", as.integer(code_level3)))
 }
 ```
 
@@ -158,23 +216,27 @@ atus_act   <- load_atus_data("act")
 atus_codes <- load_atus_activities()
 atus_cps   <- load_atus_data("cps")
 
-# Join key demographic variables from CPS into resp
-# pulineno == 1 identifies the ATUS respondent row in the CPS file
-atus_resp <- atus_cps |>
-    filter(pulineno == 1) |>
+# The ATUS respondent is always person line 1 (TULINENO = 1) in the ATUS files,
+# so that is the row to take from the ATUS-CPS file. (PULINENO is the CPS
+# household line number, which is usually 1 for the householder instead.)
+cps_demo <- atus_cps |>
+    filter(tulineno == 1) |>
     select(
         participant_id,
-        age        = prtage,
-        married    = pemaritl,
-        fam_income = hefaminc,
-        race       = ptdtrace,
-        education  = peeduca,
-        occupation = peio1ocd,
-        sex        = pesex,
-        month      = hrmonth
+        age          = prtage,
+        married_code = pemaritl,
+        fam_income   = hefaminc,
+        race         = ptdtrace,
+        education    = peeduca,
+        occupation   = peio1ocd,
+        sex          = pesex
     ) |>
     mutate(
-        married = married %in% c(1, 2),
+        married = case_when(
+            married_code %in% c(1, 2)  ~ TRUE,
+            married_code %in% 3:6      ~ FALSE,
+            .default = NA
+        ),
         sex = case_match(sex, 1 ~ "M", 2 ~ "F"),
         fam_income = case_match(fam_income,
             1  ~ "Less than $5,000",
@@ -212,9 +274,148 @@ atus_resp <- atus_cps |>
             45 ~ "Professional degree",
             46 ~ "Doctoral degree",
             .default = NA_character_)
-    ) |>
-    right_join(atus_resp, join_by(participant_id == participant_id))
+    )
+
+stopifnot(!anyDuplicated(cps_demo$participant_id))
+
+atus_resp <- atus_resp |>
+    left_join(cps_demo, join_by(participant_id)) |>
+    mutate(
+        age_group = cut(age,
+                        breaks = c(14, 24, 34, 44, 54, 64, 85),
+                        labels = c("15-24", "25-34", "35-44",
+                                   "45-54", "55-64", "65+")),
+        college_age_group = cut(age,
+                                breaks = c(17, 22, 27, 32, 40, 85),
+                                labels = c("18-22", "23-27", "28-32",
+                                           "33-40", "41+")),
+        # The ATUS has no "retired" flag: ages 65+ who are out of the labor
+        # force is the proxy used throughout this report.
+        work_group = case_when(
+            employment_status %in% c("Employed - at work", "Employed - absent") &
+                work_time == "Full time" ~ "Employed full time",
+            employment_status == "Not in labor force" & age >= 65 ~
+                "Retired (65+, not in labor force)",
+            .default = NA_character_
+        )
+    )
 ```
+
+```{r}
+#| label: validate-demographics
+#| message: false
+#| warning: false
+
+# Safety check: the age taken from the ATUS-CPS file must agree (within one
+# year, since the CPS interview came 2 to 5 months earlier) with the age on the
+# ATUS roster for the respondent. If not, the wrong person's row was linked.
+roster_check <- atus_rost |>
+    filter(roster_line == 1) |>
+    select(participant_id, roster_age) |>
+    inner_join(atus_resp |> select(participant_id, age), join_by(participant_id)) |>
+    summarize(share = mean(abs(age - roster_age) <= 1, na.rm = TRUE)) |>
+    pull(share)
+
+stopifnot(
+    "CPS demographics do not match the ATUS respondent: check the respondent row filter" =
+        roster_check > 0.95
+)
+```
+
+```{r}
+#| label: activity-prep
+#| message: false
+#| warning: false
+
+# ATUS lexicon categories used throughout. Everything is matched on the exact
+# lexicon names (never on text fragments such as "care").
+child_care_l2 <- c(
+    "Caring for and Helping Household Children",
+    "Activities Related to Household Children's Education",
+    "Activities Related to Household Children's Health"
+)
+
+# The multi-year ATUS files contain combined activity codes (for example 180782,
+# "travel related to shopping", or 020681, "pet care") that the course lexicon
+# file does not list. The first four digits of any code are its tier 1 + tier 2
+# category, so level 1 and level 2 names are matched on those four digits.
+# Level 3 names are matched on the full six digits where the code is listed.
+lexicon_l2 <- atus_codes |>
+    mutate(code2 = substr(code_level2, 1, 4)) |>
+    select(code2, task_level1, task_level2) |>
+    distinct(code2, .keep_all = TRUE)
+lexicon_l3 <- atus_codes |>
+    select(code_level3, task_level3) |>
+    distinct(code_level3, .keep_all = TRUE)
+
+act_joined <- atus_act |>
+    mutate(code2 = substr(level3_code, 1, 4)) |>
+    left_join(lexicon_l3, join_by(level3_code == code_level3)) |>
+    left_join(lexicon_l2, join_by(code2)) |>
+    mutate(activity_label = case_when(
+        task_level2 %in% child_care_l2                       ~ "Child Care",
+        task_level1 == "Household Activities"                ~ "Household Activities",
+        task_level1 %in% c("Socializing, Relaxing, and Leisure",
+                           "Sports, Exercise, and Recreation") ~ "Leisure & Recreation",
+        task_level1 == "Education"                           ~ "Education & Studying",
+        task_level1 == "Personal Care"                       ~ "Sleep & Personal Care",
+        task_level1 == "Work and Work-Related Activities"    ~ "Working",
+        .default = NA_character_
+    ))
+
+# Share of diary minutes assigned to an activity category
+matched_share <- sum(act_joined$time_spent_min[!is.na(act_joined$task_level1)], na.rm = TRUE) /
+    sum(act_joined$time_spent_min, na.rm = TRUE)
+
+# Hours per respondent on one diary day for the activities selected by `keep`.
+# Respondents who did not do the activity get 0, so means are per respondent
+# per day (not per logged activity).
+person_hours <- function(keep) {
+    act_joined |>
+        filter({{ keep }}) |>
+        group_by(participant_id) |>
+        summarize(hours = sum(time_spent_min, na.rm = TRUE) / 60, .groups = "drop") |>
+        right_join(atus_resp, join_by(participant_id)) |>
+        mutate(hours = replace_na(hours, 0))
+}
+
+# Weighted quantile (so quartiles are consistent with the weighted means)
+wtd_quantile <- function(x, w, p) {
+    o  <- order(x)
+    x  <- x[o]
+    w  <- w[o]
+    cw <- cumsum(w) / sum(w)
+    x[which(cw >= p)[1]]
+}
+
+fmt1 <- function(x) formatC(x, format = "f", digits = 1)
+fmt2 <- function(x) formatC(x, format = "f", digits = 2)
+say  <- function(...) cat("\n", paste0(...), "\n\n", sep = "")
+```
+
+### How the Numbers Are Built
+
+- **Unit of analysis.** Every number is an average per respondent per diary 
+  day. Minutes are totaled for each respondent, and respondents who did not do 
+  an activity count as zero. Averages use the ATUS final weights.
+- **Primary activities only.** The ATUS diary records one main activity at a 
+  time. Time spent on something while doing something else is not counted.
+- **Activity groups** come from the exact ATUS lexicon names. "Child care" 
+  means caring for household children, helping with their education, and 
+  helping with their health.
+- **Employment** follows the BLS definitions: employed (at work or absent), 
+  unemployed (on layoff or looking), or not in the labor force. The ATUS does 
+  not flag retirees or stay-at-home parents, so "retired" means ages 65 and 
+  older who are not in the labor force. "Stay-at-home dad" is also a proxy, 
+  defined with its profile table. Both are proxies, not labels from the survey.
+- **Demographics** come from the ATUS-CPS file, using the respondent's row. 
+  `r percent(roster_check, accuracy = 0.1)` of respondents' ages there match 
+  their ATUS roster age within one year. `r percent(matched_share, accuracy = 0.1)` 
+  of diary minutes are assigned to an activity category; the multi-year files 
+  include combined codes (such as travel related to shopping) that are matched 
+  to their category using the first four digits of the activity code.
+- **Sample sizes** are shown with the results. Small groups give noisy 
+  estimates.
 
 ## Exploratory Analysis
 
@@ -228,48 +429,33 @@ atus_resp <- atus_cps |>
 #| warning: false
 
 # Q1: How many unique respondents since 2003?
-n_respondents <- atus_resp |> 
-    distinct(participant_id) |> 
-    nrow()
+n_respondents <- n_distinct(atus_resp$participant_id)
 
-# Q2: How many different sports does ATUS track at Level 3?
+# Q2: How many different sports and exercise activities does ATUS track?
+# (the "participating" list; the watching list repeats the same sports)
 n_sports <- atus_codes |>
-    filter(str_detect(tolower(task_level2), "sport")) |>
-    distinct(task_level3) |>
+    filter(task_level2 == "Participating in Sports, Exercise, or Recreation",
+           !str_starts(task_level3, "Other")) |>
     nrow()
 
-# Q3: What percent of Americans are retired?
-pct_retired <- atus_resp |>
-    summarize(
-        pct = weighted.mean(employment_status == "Retired", 
-                           survey_weight, 
-                           na.rm = TRUE)
-    ) |>
-    pull(pct)
+# Q3: Who is out of the labor force, and who is (proxy) retired?
+pct_nilf <- weighted.mean(atus_resp$employment_status == "Not in labor force",
+                          atus_resp$survey_weight, na.rm = TRUE)
+pct_retired_proxy <- weighted.mean(
+    atus_resp$employment_status == "Not in labor force" & atus_resp$age >= 65,
+    atus_resp$survey_weight, na.rm = TRUE)
 
-# Q4: Average hours of sleep per night
-avg_sleep_hrs <- atus_act |>
-    inner_join(atus_codes, join_by(level3_code == code_level3)) |>
-    filter(str_detect(tolower(task_level2), "sleep")) |>
-    group_by(participant_id) |>
-    summarize(total_sleep_min = sum(time_spent_min, na.rm = TRUE)) |>
-    left_join(atus_resp |> select(participant_id, survey_weight),
-              join_by(participant_id)) |>
-    summarize(avg = weighted.mean(total_sleep_min, survey_weight, na.rm = TRUE)) |>
-    pull(avg) / 60
+# Q4: Average hours of sleep per night (all respondents)
+avg_sleep_hrs <- person_hours(task_level2 == "Sleeping") |>
+    summarize(avg = weighted.mean(hours, survey_weight)) |>
+    pull(avg)
 
-# Q5: Average hours parents spend on child care
-avg_childcare_hrs <- atus_act |>
-    inner_join(atus_codes, join_by(level3_code == code_level3)) |>
-    filter(str_detect(tolower(task_level1), "care")) |>
-    group_by(participant_id) |>
-    summarize(total_cc_min = sum(time_spent_min, na.rm = TRUE)) |>
-    right_join(atus_resp |> filter(n_children >= 1) |> 
-               select(participant_id, survey_weight),
-               join_by(participant_id)) |>
-    mutate(total_cc_min = replace_na(total_cc_min, 0)) |>
-    summarize(avg = weighted.mean(total_cc_min, survey_weight, na.rm = TRUE)) |>
-    pull(avg) / 60
+# Q5: Average hours parents spend on child care (respondents with a child
+# under 18 in the household)
+avg_childcare_hrs <- person_hours(task_level2 %in% child_care_l2) |>
+    filter(n_children >= 1) |>
+    summarize(avg = weighted.mean(hours, survey_weight)) |>
+    pull(avg)
 ```
 
 The ATUS dataset is vast in scope. Since 2003, 
@@ -278,43 +464,33 @@ in the survey, providing a foundation for understanding how time-spent
 patterns have evolved over the last two decades.
 
 When it comes to sports, ATUS is surprisingly granular. The survey tracks 
-**`r n_sports`** distinct sports at the most detailed activity level, allowing 
-analysts to distinguish between activities like golf, basketball, and yoga 
-rather than lumping them all into a single "sports" category.
+**`r n_sports`** distinct sports and exercise activities at the most detailed 
+activity level, allowing analysts to distinguish between activities like golf, 
+basketball, and yoga rather than lumping them all into a single "sports" 
+category.
 
-Approximately **`r percent(pct_retired, accuracy=0.1)`** of Americans in the 
-ATUS sample are retired, reflecting both the aging of the US population and 
-the growing share of older adults in the workforce-eligible population.
+About **`r percent(pct_nilf, accuracy=0.1)`** of respondents are not in the 
+labor force, a group that includes retirees but also students, homemakers, and 
+people who are unable to work. Adults 65 and older who are not in the labor 
+force, our proxy for retirees, make up 
+**`r percent(pct_retired_proxy, accuracy=0.1)`** of the sample, reflecting the 
+aging of the US population.
 
 Sleep is a universal human activity, and the data confirms this. 
 On average, Americans sleep **`r round(avg_sleep_hrs, 1)`** hours per night, a 
-figures that aligns with general health recommendations.
+figure that is in line with general health recommendations.
 
-Finally, the research finds what may be obvious to many: parenting is a substantial 
-time commitment. Among Americans with at least one child under 18 at home, the 
-average time devoted to child care activities, including education involvement 
-and healthcare, is **`r round(avg_childcare_hrs, 1)`** hours per day. This figure 
-is likely understated since many passive supervision hours may not be captured in 
-self-reported activity logs.
+Finally, the research finds what may be obvious to many: parenting is a 
+substantial time commitment. Among Americans with at least one child under 18 
+at home, the average time devoted to child care activities, including 
+education involvement and healthcare, is 
+**`r fmt2(avg_childcare_hrs)`** hours per day. This figure likely 
+understates total parenting time because it counts only primary activities; 
+supervising children while doing something else is not included.
 
 ### Time-Use Patterns by the Numbers
 
 <!-- Task 5: Exploratory Questions - Table Answers -->
-
-```{r}
-#| label: task5-setup
-#| message: false
-#| warning: false
-
-# Joined dataset reused across all Task 5 questions
-act_joined <- atus_act |>
-    inner_join(atus_codes, join_by(level3_code == code_level3)) |>
-    left_join(atus_resp |> select(participant_id, survey_weight, 
-                                   employment_status, married, 
-                                   age, sex, n_children, fam_income,
-                                   occupation, month, enrolled_in_college),
-              join_by(participant_id))
-```
 
 #### Lawn Care: Retired vs. the Full-Time Employed
 
@@ -323,39 +499,68 @@ extra time freed up from their careers, are able to dedicate it to activities
 that felt out of reach during their working years. One such activity is lawn care 
 and gardening. The table below puts this assumption to the test by 
 comparing average time spent on these activities between retired and 
-full-time employed Americans.
+full-time employed Americans. Both groups are averaged over every respondent, 
+including those who did no lawn care on their diary day.
 
 ```{r}
 #| label: task5-lawn
 #| message: false
 #| warning: false
 
-lawn_care <- act_joined |>
-    filter(str_detect(tolower(task_level2), "lawn|garden")) |>
-    filter(employment_status %in% c("Retired", "Employed - Full Time")) |>
-    group_by(employment_status) |>
+lawn_care <- person_hours(task_level3 == "Lawn, garden, and houseplant care") |>
+    filter(!is.na(work_group)) |>
+    group_by(work_group) |>
     summarize(
-        avg_min_per_day = weighted.mean(time_spent_min, survey_weight, na.rm = TRUE),
+        respondents     = n(),
+        avg_min_per_day = weighted.mean(hours, survey_weight) * 60,
+        pct_any         = weighted.mean(hours > 0, survey_weight),
+        avg_min_if_any  = weighted.mean(hours[hours > 0], survey_weight[hours > 0]) * 60,
         .groups = "drop"
     ) |>
-    mutate(avg_hrs_per_week = round(avg_min_per_day * 7 / 60, 2))
+    mutate(avg_hrs_per_week = avg_min_per_day * 7 / 60)
 
 lawn_care |>
     gt() |>
     cols_label(
-        employment_status = "Employment Status",
-        avg_min_per_day   = "Avg. Minutes/Day",
-        avg_hrs_per_week  = "Avg. Hours/Week"
+        work_group       = "Group",
+        respondents      = "Respondents",
+        avg_min_per_day  = "Avg. Minutes/Day (All)",
+        pct_any          = "% Doing Any",
+        avg_min_if_any   = "Avg. Minutes (If Any)",
+        avg_hrs_per_week = "Avg. Hours/Week (All)"
     ) |>
-    fmt_number(columns = avg_min_per_day, decimals = 1) |>
+    fmt_number(columns = c(avg_min_per_day, avg_min_if_any), decimals = 1) |>
+    fmt_number(columns = avg_hrs_per_week, decimals = 2) |>
+    fmt_number(columns = respondents, decimals = 0, use_seps = TRUE) |>
+    fmt_percent(columns = pct_any, decimals = 1) |>
     tab_header(
         title    = "Time Spent on Lawn Care & Gardening",
-        subtitle = "Retired vs. Full-Time Employed Americans"
+        subtitle = "Retired (proxy) vs. Full-Time Employed Americans"
     ) |>
     tab_source_note("Source: ATUS 2003–2024 Public Use Microdata")
 ```
 
-Maybe we already have the greenest grass. Contrary to the common belief, retired Americans do not spend more time on lawn care and gardening than their full-time employed counterparts. In fact, the average time spent on these activities is quite similar between the two groups. This suggests that while retirees may have more free time, they do not necessarily choose to allocate it to lawn care, perhaps preferring other leisure activities or simply enjoying their outdoor spaces without the need for maintenance.
+```{r}
+#| label: task5-lawn-text
+#| echo: false
+#| results: asis
+
+ret <- lawn_care |> filter(work_group == "Retired (65+, not in labor force)")
+emp <- lawn_care |> filter(work_group == "Employed full time")
+lawn_ratio <- ret$avg_min_per_day / emp$avg_min_per_day
+
+nums <- paste0("(", fmt1(ret$avg_min_per_day), " vs. ", fmt1(emp$avg_min_per_day),
+               " minutes per day; ", percent(ret$pct_any, accuracy = 1), " vs. ",
+               percent(emp$pct_any, accuracy = 1), " report any lawn or garden time)")
+
+if (lawn_ratio >= 1.15) {
+    say("Retirees do spend more time on lawn care and gardening than their full-time employed counterparts ", nums, ". The common belief holds up: some of the free time that retirement creates goes to the yard.")
+} else if (lawn_ratio <= 0.87) {
+    say("Contrary to the common belief, retired Americans spend less time on lawn care and gardening than their full-time employed counterparts ", nums, ". This suggests that while retirees may have more free time, they do not necessarily choose to allocate it to lawn care, perhaps preferring other leisure activities or simply enjoying their outdoor spaces without the need for maintenance.")
+} else {
+    say("Maybe we already have the greenest grass. Retired Americans spend about as much time on lawn care and gardening as their full-time employed counterparts ", nums, ". This suggests that while retirees may have more free time, they do not necessarily choose to allocate it to lawn care, perhaps preferring other leisure activities or simply enjoying their outdoor spaces without the need for maintenance.")
+}
+```
 
 ---
 
@@ -363,34 +568,40 @@ Maybe we already have the greenest grass. Contrary to the common belief, retired
 
 Marriage is often associated with a shift in social priorities. The table below 
 examines whether married and unmarried Americans actually differ in how much time 
-they dedicate to social and recreational activities.
+they dedicate to social and recreational activities. Here, that means everything 
+the ATUS groups under "Socializing, Relaxing, and Leisure" (which includes 
+watching TV) and under "Sports, Exercise, and Recreation".
 
 ```{r}
 #| label: task5-social
 #| message: false
 #| warning: false
 
-social_time <- act_joined |>
-    filter(str_detect(tolower(task_level1), "social|leisure|recreation")) |>
+social_time <- person_hours(activity_label == "Leisure & Recreation") |>
     filter(!is.na(married)) |>
     group_by(married) |>
     summarize(
-        avg_min_per_day = weighted.mean(time_spent_min, survey_weight, na.rm = TRUE),
+        respondents     = n(),
+        avg_hrs_per_day = weighted.mean(hours, survey_weight),
         .groups = "drop"
     ) |>
     mutate(
-        married = if_else(married, "Married", "Unmarried"),
-        avg_hrs_per_day = round(avg_min_per_day / 60, 2)
-    )
+        married         = if_else(married, "Married", "Unmarried"),
+        avg_min_per_day = avg_hrs_per_day * 60
+    ) |>
+    select(married, respondents, avg_min_per_day, avg_hrs_per_day)
 
 social_time |>
     gt() |>
     cols_label(
         married         = "Marital Status",
+        respondents     = "Respondents",
         avg_min_per_day = "Avg. Minutes/Day",
         avg_hrs_per_day = "Avg. Hours/Day"
     ) |>
     fmt_number(columns = avg_min_per_day, decimals = 1) |>
+    fmt_number(columns = avg_hrs_per_day, decimals = 2) |>
+    fmt_number(columns = respondents, decimals = 0, use_seps = TRUE) |>
     tab_header(
         title    = "Time Spent on Social & Recreational Activities",
         subtitle = "Married vs. Unmarried Americans"
@@ -398,11 +609,23 @@ social_time |>
     tab_source_note("Source: ATUS 2003–2024 Public Use Microdata")
 ```
 
-Unmarried Americans spend slightly more time on social and recreational 
-activities than married Americans. This difference may reflect the fact that 
-married individuals tend to also have children which, as we saw before, take up 
-a large time of their time. It may also reflect that unmarried people rely more 
-heavily on social activities as a primary source of connection and entertainment.
+```{r}
+#| label: task5-social-text
+#| echo: false
+#| results: asis
+
+m_hrs <- social_time$avg_hrs_per_day[social_time$married == "Married"]
+u_hrs <- social_time$avg_hrs_per_day[social_time$married == "Unmarried"]
+nums  <- paste0("(", fmt2(u_hrs), " vs. ", fmt2(m_hrs), " hours per day)")
+
+if (u_hrs - m_hrs >= 0.1) {
+    say("Unmarried Americans spend more time on social and recreational activities than married Americans ", nums, ". One possible reason is that married Americans are more likely to have children at home, which takes up a large share of their time. It may also reflect that unmarried people rely more heavily on social activities as a primary source of connection and entertainment. This table does not test either explanation, and the two groups also differ in age and employment.")
+} else if (m_hrs - u_hrs >= 0.1) {
+    say("Married Americans spend more time on social and recreational activities than unmarried Americans ", nums, ". This table does not explain why, and the two groups also differ in age and employment.")
+} else {
+    say("Married and unmarried Americans spend about the same amount of time on social and recreational activities ", nums, ". The two groups also differ in age and employment, which this table does not account for.")
+}
+```
 
 ---
 
@@ -411,26 +634,29 @@ heavily on social activities as a primary source of connection and entertainment
 Understanding how affluent Americans allocate their time offers insight into 
 the lifestyle trade-offs that come with high-income careers. Here, 
 "high-earning" is defined as households with annual family income of at least 
-$100,000. The table ranks their top eight activity categories by average daily time spent.
+$100,000 (nominal dollars, not adjusted for inflation across the survey years). 
+The table ranks their top eight activity categories by average daily time spent.
 
 ```{r}
 #| label: task5-highearn
 #| message: false
 #| warning: false
 
-# Defining High-Earners 
+high_resp    <- atus_resp |>
+    filter(fam_income %in% c("$100,000 to $149,999", "$150,000 and over"))
+high_total_w <- sum(high_resp$survey_weight)
 
-high_earner_time <- act_joined |>
-    filter(fam_income %in% c("$100,000 to $149,999", "$150,000 and over")) |>
-    filter(!str_detect(tolower(task_level1), "data code")) |>
+high_all <- act_joined |>
+    filter(task_level1 != "Data Codes") |>
+    inner_join(high_resp |> select(participant_id, survey_weight),
+               join_by(participant_id)) |>
     group_by(task_level1) |>
-    summarize(
-        avg_min_per_day = weighted.mean(time_spent_min, survey_weight, na.rm = TRUE),
-        .groups = "drop"
-    ) |>
-    arrange(desc(avg_min_per_day)) |>
-    slice_head(n = 8) |>
-    mutate(avg_hrs_per_day = round(avg_min_per_day / 60, 2))
+    summarize(avg_min_per_day = sum(time_spent_min * survey_weight) / high_total_w,
+              .groups = "drop") |>
+    mutate(avg_hrs_per_day = avg_min_per_day / 60) |>
+    arrange(desc(avg_min_per_day))
+
+high_earner_time <- high_all |> slice_head(n = 8)
 
 high_earner_time |>
     gt() |>
@@ -440,6 +666,7 @@ high_earner_time |>
         avg_hrs_per_day = "Avg. Hours/Day"
     ) |>
     fmt_number(columns = avg_min_per_day, decimals = 1) |>
+    fmt_number(columns = avg_hrs_per_day, decimals = 2) |>
     tab_header(
         title    = "Where High-Earning Americans Spend Their Time",
         subtitle = "Households earning $100,000 or more annually"
@@ -447,10 +674,31 @@ high_earner_time |>
     tab_source_note("Source: ATUS 2003–2024 Public Use Microdata")
 ```
 
-Unsurprisingly, work and work-related activities top this list, although the actual
-self-reported total amount seems lower than expected for such a high-earning group, 
-suggesting that many may under-report work time or that they have more efficient work habits. However, the prominence of leisure and social activities indicates that high earners do not 
-simply sacrifice all free time for professional output.
+```{r}
+#| label: task5-highearn-text
+#| echo: false
+#| results: asis
+
+hrs_of <- function(label) high_all$avg_hrs_per_day[high_all$task_level1 == label]
+work_h    <- hrs_of("Work and Work-Related Activities")
+leisure_h <- hrs_of("Socializing, Relaxing, and Leisure")
+
+say("The largest category is ", tolower(high_all$task_level1[1]), " at ",
+    fmt1(high_all$avg_hrs_per_day[1]), " hours per day, followed by ",
+    tolower(high_all$task_level1[2]), " (", fmt1(high_all$avg_hrs_per_day[2]),
+    ") and ", tolower(high_all$task_level1[3]), " (", fmt1(high_all$avg_hrs_per_day[3]), ").")
+
+lw_cmp <- if (abs(leisure_h - work_h) < 0.5) {
+    "about as much as they spend on work"
+} else if (leisure_h > work_h) {
+    "more than they spend on work"
+} else {
+    "less than they spend on work"
+}
+
+say("Work and work-related activities average ", fmt1(work_h), " hours per day. That is an average over every diary day, weekends included, and over every respondent in these households, including those who were not working, so it is lower than the length of a typical workday. High earners also average ", fmt1(leisure_h), " hours per day on socializing, relaxing, and leisure, ", lw_cmp, ".",
+    if (leisure_h >= 0.75 * work_h) " High earners do not give up all of their free time for professional output." else "")
+```
 
 ---
 
@@ -458,54 +706,67 @@ simply sacrifice all free time for professional output.
 
 Americans who find themselves aboard a bus, train, subway, boat, or ferry occupy 
 a unique moment where their physical movement is fixed but their attention is 
-entirely their own. The table below identifies the ten most 
-commonly reported activities among Americans while aboard these vehicles, 
-regardless of whether they are commuting to work, traveling for leisure, or 
-spending a day out on the water.
+entirely their own. The table below identifies the ten most commonly reported 
+activities among Americans while aboard these vehicles, other than the travel 
+itself. The ATUS codes the ride as travel, so riding is excluded here.
 
 ```{r}
 #| label: task5-transit
 #| message: false
 #| warning: false
 
+# ATUS "where" codes: 15 = bus, 16 = subway/train, 18 = boat/ferry
+transit_codes <- c(15, 16, 18)
+
 transit_activities <- act_joined |>
-    filter(location_code %in% c(18, 19, 20, 21, 22)) |>
-    filter(!str_detect(tolower(task_level3), "travel related|traveling")) |>
-    filter(!str_detect(tolower(task_level2), "travel")) |>
-    filter(!str_detect(tolower(task_level3), "boat")) |>
-    filter(!str_detect(tolower(task_level3), "insufficient detail")) |>
-    group_by(task_level3) |>
+    filter(location_code %in% transit_codes,
+           !task_level1 %in% c("Traveling", "Data Codes"),
+           !str_detect(tolower(coalesce(task_level3, "")), "boat")) |>
+    inner_join(atus_resp |> select(participant_id, survey_weight),
+               join_by(participant_id)) |>
+    # Combined multi-year codes have no tier-3 name; fall back to the tier-2 name
+    mutate(activity = coalesce(task_level3, task_level2)) |>
+    group_by(activity) |>
     summarize(
-        n = n(),
-        avg_min = weighted.mean(time_spent_min, survey_weight, na.rm = TRUE),
+        n_people = n_distinct(participant_id),
+        avg_min  = weighted.mean(time_spent_min, survey_weight, na.rm = TRUE),
         .groups = "drop"
     ) |>
-    arrange(desc(n)) |>
+    arrange(desc(n_people)) |>
     slice_head(n = 10)
 
 transit_activities |>
     gt() |>
     cols_label(
-        task_level3 = "Activity",
-        n           = "Number of Reports",
+        activity    = "Activity",
+        n_people    = "Number of Respondents",
         avg_min     = "Avg. Minutes"
     ) |>
     fmt_number(columns = avg_min, decimals = 1) |>
-    fmt_number(columns = n, decimals = 0) |>
+    fmt_number(columns = n_people, decimals = 0) |>
     tab_header(
       title    = "Most Common Activities on a Bus, Train, Subway, Boat, or Ferry",
-      subtitle = "What Americans report doing while aboard these vehicles"
+      subtitle = "Primary activities other than travel, reported while aboard these vehicles"
     ) |>
     tab_source_note("Source: ATUS 2003–2024 Public Use Microdata")
 ```
 
-When filtering out travel-purpose categories to focus on what Americans actually 
-do aboard different modes of transportation, a clearer and more interesting 
-picture emerges. Working is the most commonly reported activity, logged by 180 respondents and averaging nearly three hours. This suggests that for a meaningful segment of 
-riders, the commute is simply an extension of the workday. It is worth noting that for 
-some of the respondents, being aboard, say, a ferry, is their main job (think crew members). 
-Eating and drinking ranks second, reflecting how commuters fold meals into their travel routine to make the best use of their limited time. Leisure activities such as fishing, are reported by a smaller number of respondents, but the average time spent on these activities is higher on average.
-Beyond that, reading, relaxing, and listening to music or podcasts dominate, reflecting how commuters tend to use transit time for low-effort personal activities rather than productive work. This has interesting implications for our app: transit time may be an ideal moment to prompt users to log their activities.
+```{r}
+#| label: task5-transit-text
+#| echo: false
+#| results: asis
+
+top3 <- transit_activities |> slice_head(n = 3)
+work_aboard <- "Work, main job" %in% transit_activities$activity
+
+say("Because the ATUS codes the ride itself as travel, this table cannot show how riders use their trip. It shows the other primary activities respondents logged while aboard. The most commonly reported is ",
+    tolower(top3$activity[1]), " (", comma(top3$n_people[1]), " respondents, averaging ",
+    fmt1(top3$avg_min[1]), " minutes), followed by ", tolower(top3$activity[2]),
+    " (", comma(top3$n_people[2]), ") and ", tolower(top3$activity[3]), " (", comma(top3$n_people[3]), ").",
+    if (work_aboard) " Work appears in the list, and many of those entries are likely drivers, conductors, and crew for whom being aboard is the job; the ATUS does not identify them." else "")
+
+say("For our app, the takeaway is a limit rather than an opportunity: the ATUS cannot tell us whether transit time is a good moment to prompt users to log their activities. That would need to be tested with app usage data.")
+```
 
 ---
 
@@ -519,46 +780,33 @@ The table below tracks four universally common activities:
 - TV watching
 
 We split the results across six age groups to reveal how priorities shift 
-as Americans grow older.
+as Americans grow older. Each number is an average over every respondent in the 
+age group, including people who did none of the activity on their diary day.
 
 ```{r}
 #| label: task5-fav
 #| message: false
 #| warning: false
 
-fav_activities <- act_joined |>
-    filter(
-        str_detect(tolower(task_level2), "sleeping|eating and drinking|participating in sports") |
-        str_detect(tolower(task_level3), "television and movies \\(not religious\\)")
-    ) |>
-    mutate(
-        activity = case_when(
-            str_detect(tolower(task_level2), "sleeping")                ~ "Sleep",
-            str_detect(tolower(task_level2), "eating and drinking")     ~ "Eating & Drinking",
-            str_detect(tolower(task_level2), "participating in sports") ~ "Sports & Exercise",
-            str_detect(tolower(task_level3), "television and movies")   ~ "TV Watching"
-        ),
-        age_group = cut(age,
-                        breaks = c(14, 24, 34, 44, 54, 64, 85),
-                        labels = c("15-24", "25-34", "35-44",
-                                   "45-54", "55-64", "65+"))
-    ) |>
-    filter(!is.na(age_group), !is.na(activity)) |>
-    # Aggregate to person level first
-    group_by(participant_id, activity, age_group, survey_weight) |>
-    summarize(
-        total_hrs = sum(time_spent_min, na.rm = TRUE) / 60,
-        .groups = "drop"
-    ) |>
-    # Then average across people
+fav_activities <- bind_rows(
+    person_hours(task_level2 == "Sleeping") |>
+        mutate(activity = "Sleep"),
+    person_hours(task_level2 == "Eating and Drinking") |>
+        mutate(activity = "Eating & Drinking"),
+    person_hours(task_level2 == "Participating in Sports, Exercise, or Recreation") |>
+        mutate(activity = "Sports & Exercise"),
+    person_hours(task_level3 == "Television and movies (not religious)") |>
+        mutate(activity = "TV Watching")
+) |>
+    filter(!is.na(age_group)) |>
     group_by(activity, age_group) |>
     summarize(
-        avg_hrs = round(weighted.mean(total_hrs, survey_weight, na.rm = TRUE), 2),
+        avg_hrs = round(weighted.mean(hours, survey_weight), 2),
         .groups = "drop"
-    ) |>
-    pivot_wider(names_from = age_group, values_from = avg_hrs)
+    )
 
 fav_activities |>
+    pivot_wider(names_from = age_group, values_from = avg_hrs) |>
     gt() |>
     cols_label(activity = "Activity") |>
     tab_spanner(columns = -activity, label = "Age Group") |>
@@ -569,12 +817,41 @@ fav_activities |>
     tab_source_note("Source: ATUS 2003–2024 Public Use Microdata")
 ```
 
-Sleep remains consistent across the lifespan, hovering between 8.7 and 9.1 hours per day. 
-The youngest and oldest Americans sleep slightly more than those in middle age which likely 
-reflects the demands of work and family that peak during those years. Eating and drinking time 
-grows gradually with age, rising from just over an hour among younger Americans to 1.4 hours among those 65 and older, perhaps reflecting a slower, more social approach to meals in retirement. 
-Sports and exercise follow the expected declining pattern, peaking at 1.81 hours among 15 to 24 year olds and falling to 1.38 hours among those 65 and older. TV watching tells the most dramatic story,
-nearly doubling from 2.98 hours among the youngest group to 4.60 hours among Americans 65 and older, underscoring how retirement fundamentally reshapes how leisure time is spent.
+```{r}
+#| label: task5-fav-text
+#| echo: false
+#| results: asis
+
+get_fav <- function(act, grp) {
+    fav_activities$avg_hrs[fav_activities$activity == act & fav_activities$age_group == grp]
+}
+sleep_all <- fav_activities |> filter(activity == "Sleep")
+sleep_mid <- sleep_all |> filter(age_group %in% c("35-44", "45-54")) |> pull(avg_hrs) |> min()
+u_shape   <- get_fav("Sleep", "15-24") > sleep_mid && get_fav("Sleep", "65+") > sleep_mid
+
+sports_all   <- fav_activities |> filter(activity == "Sports & Exercise")
+sports_peak  <- sports_all$age_group[which.max(sports_all$avg_hrs)]
+tv15 <- get_fav("TV Watching", "15-24")
+tv65 <- get_fav("TV Watching", "65+")
+eat15 <- get_fav("Eating & Drinking", "15-24")
+eat65 <- get_fav("Eating & Drinking", "65+")
+
+say("Sleep ", if (diff(range(sleep_all$avg_hrs)) < 0.8) "stays within a narrow band across the lifespan" else "varies across the lifespan",
+    ", between ", fmt2(min(sleep_all$avg_hrs)), " and ", fmt2(max(sleep_all$avg_hrs)), " hours per day.",
+    if (u_shape) " The youngest and oldest Americans sleep slightly more than those in the middle years, which likely reflects the demands of work and family that peak during those years." else "")
+
+say("Eating and drinking time ", if (eat65 > eat15) "grows" else "shrinks",
+    " with age, from ", fmt2(eat15), " hours among 15 to 24 year olds to ", fmt2(eat65),
+    " hours among those 65 and older",
+    if (eat65 > eat15) ", perhaps reflecting a slower, more social approach to meals in retirement." else ".",
+    " Sports and exercise average ", fmt2(max(sports_all$avg_hrs)), " hours at their peak (",
+    sports_peak, ") and ", fmt2(get_fav("Sports & Exercise", "65+")), " hours among those 65 and older.")
+
+say("TV watching ", if (tv65 > tv15) "rises" else "falls", " from ", fmt2(tv15),
+    " hours among the youngest group to ", fmt2(tv65), " hours among Americans 65 and older, a change of ",
+    percent(abs(tv65 / tv15 - 1), accuracy = 1),
+    if (tv65 > tv15) ", consistent with retirement freeing up time for leisure, although these snapshots cannot separate aging from generational differences." else ".")
+```
 
 ### Visual Representation of Time
 
@@ -587,74 +864,134 @@ nearly doubling from 2.98 hours among the youngest group to 4.60 hours among Ame
 #| message: false
 #| warning: false
 
-household_by_age <- act_joined |>
-    filter(str_detect(tolower(task_level1), "household")) |>
-    filter(!is.na(age)) |>
-    mutate(age_group = cut(age,
-                           breaks = c(14, 24, 34, 44, 54, 64, 85),
-                           labels = c("15-24", "25-34", "35-44",
-                                      "45-54", "55-64", "65+"))) |>
+household_by_age <- person_hours(task_level1 == "Household Activities") |>
     filter(!is.na(age_group)) |>
     group_by(age_group) |>
     summarize(
-        avg_hrs = weighted.mean(time_spent_min, survey_weight, na.rm = TRUE) / 60,
+        avg_hrs = weighted.mean(hours, survey_weight),
         .groups = "drop"
     )
 
 ggplot(household_by_age, aes(x = age_group, y = avg_hrs, group = 1)) +
     geom_line(color = "#0072B2", linewidth = 1.2) +
     geom_point(color = "#0072B2", size = 3) +
+    scale_y_continuous(limits = c(0, NA)) +
     labs(
         title    = "Time Spent on Household Activities by Age Group",
-        subtitle = "Older Americans dedicate significantly more time to household tasks",
+        subtitle = "Average hours per day, all respondents in each age group",
         x        = "Age Group",
         y        = "Average Hours per Day",
         caption  = "Source: ATUS 2003–2024 Public Use Microdata"
     )
 ```
 
-As Americans age, time spent on household activities rises steadily, peaking 
-among those 65 and older. This likely reflects a shift away from paid work 
-toward home-based responsibilities and, for retirees, having more hours 
-available during the day to devote to these tasks.
+```{r}
+#| label: task6-graph1-text
+#| echo: false
+#| results: asis
+
+hh_peak     <- as.character(household_by_age$age_group[which.max(household_by_age$avg_hrs)])
+hh_peak_hrs <- max(household_by_age$avg_hrs)
+hh_low      <- as.character(household_by_age$age_group[which.min(household_by_age$avg_hrs)])
+hh_low_hrs  <- min(household_by_age$avg_hrs)
+hh_rises    <- all(diff(household_by_age$avg_hrs) > 0)
+
+say("Time spent on household activities is highest among ", hh_peak, " (", fmt2(hh_peak_hrs),
+    " hours per day) and lowest among ", hh_low, " (", fmt2(hh_low_hrs), ").",
+    if (hh_rises) " It rises steadily with age, which likely reflects a shift away from paid work toward home-based responsibilities and, for retirees, having more hours available during the day to devote to these tasks." else " It does not rise steadily with age.")
+```
 
 ---
 
 #### Summer Activities for Education Workers
+
+Do teachers really spend their summers at the beach? The chart compares a typical 
+day for K-12 and other teachers in the summer (June to August) with a day in the 
+school year (September to May). Both include weekends and holidays. Months come 
+from the actual diary date, and teachers are identified from Census occupation 
+codes 2300 to 2360, a range that was revised during the survey period, so we 
+treat the results as indicative.
 
 ```{r}
 #| label: task6-graph2
 #| message: false
 #| warning: false
 
-summer_edu <- act_joined |>
-    filter(!is.na(occupation)) |>
-    filter(occupation >= 2300 & occupation <= 2360) |>
-    filter(employment_status %in% c("Employed - Full Time", 
-                                     "Employed - Part Time")) |>
-    filter(month %in% c(6, 7, 8)) |>
-    filter(!str_detect(tolower(task_level1), "data code")) |>
-    group_by(task_level1) |>
-    summarize(
-        avg_hrs = weighted.mean(time_spent_min, survey_weight, na.rm = TRUE) / 60,
-        .groups = "drop"
-    ) |>
-    arrange(desc(avg_hrs)) |>
-    slice_head(n = 8)
+teachers <- atus_resp |>
+    filter(!is.na(occupation), occupation >= 2300, occupation <= 2360,
+           employment_status %in% c("Employed - at work", "Employed - absent"),
+           !is.na(diary_month)) |>
+    mutate(period = if_else(diary_month %in% 6:8,
+                            "Summer (June-August)", "School year (September-May)"))
 
-ggplot(summer_edu, aes(x = reorder(task_level1, avg_hrs), y = avg_hrs)) +
-    geom_col(fill = "#956C3B") +
+teacher_w <- teachers |>
+    group_by(period) |>
+    summarize(w_total = sum(survey_weight), n = n(), .groups = "drop")
+
+teacher_time <- act_joined |>
+    filter(task_level1 != "Data Codes") |>
+    inner_join(teachers |> select(participant_id, survey_weight, period),
+               join_by(participant_id)) |>
+    group_by(period, task_level1) |>
+    summarize(w_minutes = sum(time_spent_min * survey_weight), .groups = "drop") |>
+    left_join(teacher_w, join_by(period)) |>
+    mutate(avg_hrs = w_minutes / w_total / 60)
+
+top_teacher_cats <- teacher_time |>
+    group_by(task_level1) |>
+    summarize(m = mean(avg_hrs), .groups = "drop") |>
+    slice_max(m, n = 6) |>
+    pull(task_level1)
+
+teacher_caption <- paste0(
+    "n = ", paste0(teacher_w$n, " (", teacher_w$period, ")", collapse = "; "),
+    "\nSource: ATUS 2003–2024 Public Use Microdata")
+
+teacher_time |>
+    filter(task_level1 %in% top_teacher_cats) |>
+    mutate(task_level1 = str_wrap(task_level1, 28)) |>
+    ggplot(aes(x = reorder(task_level1, avg_hrs), y = avg_hrs, fill = period)) +
+    geom_col(position = "dodge") +
     coord_flip() +
+    scale_fill_manual(values = c("Summer (June-August)" = "#956C3B",
+                                 "School year (September-May)" = "#0072B2")) +
     labs(
-        title    = "Most Popular Activities for Education Workers in Summer",
-        subtitle = "June, July & August | K-12 Teachers (Occupation codes 2300–2360)",
+        title    = "How Teachers' Days Differ in Summer vs. the School Year",
+        subtitle = "Average hours per day on the six largest activity categories",
         x        = NULL,
         y        = "Average Hours per Day",
-        caption  = "Source: ATUS 2003–2024 Public Use Microdata"
-    )
+        fill     = NULL,
+        caption  = teacher_caption
+    ) +
+    theme(legend.position = "bottom")
 ```
 
-Some might imagine teachers spend summers at the beach, but the ATUS data show that K-12 educators change little in their daily routines between summer and the school year. Work and work-related activities remain the top category in both periods, hovering around three hours per day even in June, July, and August. This suggests that many teachers use the summer months for professional development, lesson planning, or even second jobs rather than taking an extended break from work. Leisure and social activities also see an uptick in summer, but they do not overtake work as the dominant activity category for this group. This has important implications for our app: educators may benefit from features that help them manage their time effectively during the summer, rather than assuming they have more free time to log leisure activities.
+```{r}
+#| label: task6-graph2-text
+#| echo: false
+#| results: asis
+
+tw <- function(period, cat) {
+    teacher_time$avg_hrs[teacher_time$period == period & teacher_time$task_level1 == cat]
+}
+work_s  <- tw("Summer (June-August)", "Work and Work-Related Activities")
+work_y  <- tw("School year (September-May)", "Work and Work-Related Activities")
+work_ratio <- work_s / work_y
+n_s <- teacher_w$n[teacher_w$period == "Summer (June-August)"]
+n_y <- teacher_w$n[teacher_w$period == "School year (September-May)"]
+
+lead <- paste0("Work and work-related activities average ", fmt2(work_s), " hours per day in the summer and ",
+               fmt2(work_y), " in the school year (", n_s, " and ", n_y, " teacher diaries).")
+
+if (work_ratio <= 0.5) {
+    say(lead, " Work drops sharply in summer, so teachers do get a real break, although the average is still above zero, which fits professional development, lesson planning, or second jobs.")
+} else if (work_ratio <= 0.85) {
+    say(lead, " Work falls in the summer but remains substantial, suggesting that many teachers use the summer months for professional development, lesson planning, or even second jobs rather than taking an extended break from work. This has implications for our app: educators may benefit from features that help them manage their time during the summer, rather than assuming they have more free time to log leisure activities.")
+} else {
+    say(lead, " Teachers' routines change little between summer and the school year, suggesting that many use the summer months for professional development, lesson planning, or even second jobs. This has implications for our app: educators may benefit from features that help them manage their time effectively during the summer, rather than assuming they have more free time to log leisure activities.")
+}
+if (min(n_s, n_y) < 150) say("With fewer than 150 diaries in at least one period, these averages are noisy.")
+```
 
 ---
 
@@ -665,28 +1002,44 @@ Some might imagine teachers spend summers at the beach, but the ATUS data show t
 #| message: false
 #| warning: false
 
+college_resp <- atus_resp |>
+    filter(enrolled_in_college, !is.na(college_age_group))
+
+college_w <- college_resp |>
+    group_by(college_age_group) |>
+    summarize(w_total = sum(survey_weight), n = n(), .groups = "drop")
+
 college_edu <- act_joined |>
-    filter(enrolled_in_college == TRUE) |>
-    filter(str_detect(tolower(task_level1), "education")) |>
-    filter(!is.na(age)) |>
-    mutate(age_group = cut(age,
-                           breaks = c(17, 22, 27, 32, 40, 85),
-                           labels = c("18-22", "23-27", "28-32",
-                                      "33-40", "41+"))) |>
-    filter(!is.na(age_group)) |>
-    group_by(age_group, task_level2) |>
-    summarize(
-        avg_hrs = weighted.mean(time_spent_min, survey_weight, na.rm = TRUE) / 60,
-        .groups = "drop"
+    filter(task_level1 == "Education") |>
+    inner_join(college_resp |> select(participant_id, survey_weight, college_age_group),
+               join_by(participant_id)) |>
+    group_by(college_age_group, task_level2) |>
+    summarize(w_minutes = sum(time_spent_min * survey_weight), .groups = "drop") |>
+    left_join(college_w, join_by(college_age_group)) |>
+    mutate(
+        avg_hrs   = w_minutes / w_total / 60,
+        age_label = paste0(college_age_group, "\n(n = ", comma(n), ")")
     )
 
-ggplot(college_edu, aes(x = age_group, y = avg_hrs, fill = task_level2)) +
+age_label_levels <- college_w |>
+    arrange(college_age_group) |>
+    mutate(lbl = paste0(college_age_group, "\n(n = ", comma(n), ")")) |>
+    pull(lbl)
+
+college_edu <- college_edu |>
+    mutate(age_label = factor(age_label, levels = age_label_levels))
+
+college_totals <- college_edu |>
+    group_by(college_age_group) |>
+    summarize(total_hrs = sum(avg_hrs), n = first(n), .groups = "drop")
+
+ggplot(college_edu, aes(x = age_label, y = avg_hrs, fill = task_level2)) +
     geom_col(position = "stack") +
     scale_fill_brewer(type = "qual", palette = 2, name = "Activity Type",
                       labels = function(x) str_wrap(x, width = 25)) +
     labs(
         title    = "Educational Activity Time by Age Among College Students",
-        subtitle = "Do older students study more?",
+        subtitle = "Average hours per day, all enrolled college students in each age group",
         x        = "Age Group",
         y        = "Average Hours per Day",
         caption  = "Source: ATUS 2003–2024 Public Use Microdata"
@@ -700,10 +1053,25 @@ ggplot(college_edu, aes(x = age_group, y = avg_hrs, fill = task_level2)) +
     guides(fill = guide_legend(nrow = 3))
 ```
 
-The data suggests that younger college students (18–22) actually spend more total 
-time on educational activities than their older peers. This may reflect that 
-traditional-age students are more likely to be enrolled full-time, while older 
-students often balance coursework with work and family obligations.
+```{r}
+#| label: task6-graph3-text
+#| echo: false
+#| results: asis
+
+edu_peak <- as.character(college_totals$college_age_group[which.max(college_totals$total_hrs)])
+tot18 <- college_totals$total_hrs[college_totals$college_age_group == "18-22"]
+tot_older <- weighted.mean(college_totals$total_hrs[college_totals$college_age_group != "18-22"],
+                           college_totals$n[college_totals$college_age_group != "18-22"])
+
+if (edu_peak == "18-22") {
+    say("Younger college students (ages 18 to 22) spend more total time on educational activities than their older peers: ",
+        fmt2(tot18), " hours per day, compared with ", fmt2(tot_older), " for students 23 and older. This may reflect that traditional-age students are more likely to be enrolled full-time, while older students often balance coursework with work and family obligations.")
+} else {
+    say("Total time on educational activities is highest among students aged ", edu_peak, " (",
+        fmt2(max(college_totals$total_hrs)), " hours per day). Students aged 18 to 22 average ", fmt2(tot18),
+        " hours per day, compared with ", fmt2(tot_older), " for students 23 and older.")
+}
+```
 
 ---
 
@@ -714,11 +1082,12 @@ students often balance coursework with work and family obligations.
 #| message: false
 #| warning: false
 
-sports_by_age <- act_joined |>
-    filter(str_detect(tolower(task_level2), "sport")) |>
-    filter(!str_detect(tolower(task_level3),
-                       "^attending|^waiting|^travel|^security|^other|^extracurricular|vehicle touring")) |>
-    filter(!is.na(age)) |>
+sports_person <- act_joined |>
+    filter(task_level2 %in% c("Participating in Sports, Exercise, or Recreation",
+                              "Attending Sports or Recreational Events"),
+           !is.na(task_level3),
+           !str_detect(task_level3, "^Other"),
+           !str_detect(tolower(task_level3), "vehicle touring")) |>
     mutate(
         # Strip action prefix to group watching + participating together
         sport_name = str_remove(tolower(task_level3), 
@@ -737,24 +1106,40 @@ sports_by_age <- act_joined |>
             "racquet sports"                      ~ "Racquet Sports",
             "martial arts"                        ~ "Martial Arts",
             .default = str_to_title(sport_name)
-        ),
-        age_group = cut(age,
-                        breaks = c(14, 24, 34, 44, 54, 64, 85),
-                        labels = c("15-24", "25-34", "35-44",
-                                   "45-54", "55-64", "65+"))
+        )
     ) |>
+    group_by(participant_id, sport_name) |>
+    summarize(minutes = sum(time_spent_min, na.rm = TRUE), .groups = "drop")
+
+# Average minutes per respondent per day: divide total weighted minutes by the
+# total weight of ALL respondents in the age group (so non-participants count as 0)
+age_totals <- atus_resp |>
+    filter(!is.na(age_group)) |>
+    group_by(age_group) |>
+    summarize(w_total = sum(survey_weight), .groups = "drop")
+
+sports_ranked <- sports_person |>
+    inner_join(atus_resp |> select(participant_id, survey_weight, age_group),
+               join_by(participant_id)) |>
     filter(!is.na(age_group)) |>
     group_by(age_group, sport_name) |>
-    summarize(
-        avg_min = weighted.mean(time_spent_min, survey_weight, na.rm = TRUE),
-        .groups = "drop"
-    ) |>
+    summarize(w_minutes = sum(minutes * survey_weight), .groups = "drop") |>
+    left_join(age_totals, join_by(age_group)) |>
+    mutate(avg_min = w_minutes / w_total) |>
     group_by(age_group) |>
     mutate(rank = rank(-avg_min, ties.method = "first")) |>
+    ungroup()
+
+sports_by_age <- sports_ranked |>
     filter(rank <= 6) |>
-    ungroup() |>
     group_by(sport_name) |>
     filter(n() >= 3) |>
+    ungroup()
+
+# Label each line where it last appears
+sport_labels <- sports_by_age |>
+    group_by(sport_name) |>
+    slice_max(as.integer(age_group), n = 1, with_ties = FALSE) |>
     ungroup()
 
 # Safe, distinct color palette
@@ -767,7 +1152,7 @@ ggplot(sports_by_age, aes(x = age_group, y = rank,
     geom_bump(linewidth = 1) +
     geom_point(size = 3) +
     geom_label_repel(
-        data         = sports_by_age |> filter(age_group == "65+"),
+        data         = sport_labels,
         aes(label    = sport_name),
         hjust        = 0,
         nudge_x      = 0.5,
@@ -779,7 +1164,7 @@ ggplot(sports_by_age, aes(x = age_group, y = rank,
         fill         = "white",
         label.size   = 0.2
     ) +
-    scale_y_reverse() +
+    scale_y_reverse(breaks = 1:6) +
     scale_color_manual(values = colorRampPalette(safe_colors)(12)) +
     coord_cartesian(clip = "off") +
     theme_bw() +
@@ -789,30 +1174,45 @@ ggplot(sports_by_age, aes(x = age_group, y = rank,
         plot.margin     = margin(5, 160, 5, 5)
     ) +
     labs(
-        title    = "Relative Popularity of Sports by Age Group",
-        subtitle = "Ranking by average minutes per day | Participating and watching combined",
+        title    = "Sports and Exercise Ranked by Time Spent, by Age Group",
+        subtitle = "Ranking by average minutes per person per day | Participating and watching combined",
         x        = "Age Group",
         y        = "Rank (1 = Most Time Spent)",
         caption  = "Source: ATUS 2003–2024 Public Use Microdata"
     )
 ```
 
-The bump plot reveals how sports engagement shifts across the American lifespan, 
-though the findings should be interpreted with an important caveat. Because ATUS 
-captures only a single day per respondent, sports that are seasonal tend to be 
-systematically underrepresented. This explains some surprising absences, but none 
-more than baseball. Baseball, often called America's pastime, does not appear in 
-this chart not because Americans don't play it or watch it, but because on any 
-given day, relatively few respondents happened to be playing it or watching it 
-during their survey window. Hockey, skiing, and bowling face similar challenges. 
-The sports that do appear consistently across age groups like hunting, fishing, 
-and golfing, share a common trait: they tend to involve long durations when played,
-making them more likely to be captured even in a single-day snapshot. With that 
-context in mind, the chart shows that hunting and fishing dominate across nearly 
-all age groups, while golfing rises steadily in popularity with age, consistent 
-with its reputation as a sport that grows more appealing as Americans have more 
-leisure time. Wrestling and rodeo appear among younger age groups, reflecting the 
-demographics of those who participate in or follow those activities most closely.
+```{r}
+#| label: task6-graph4-text
+#| echo: false
+#| results: asis
+
+top_by_age <- sports_ranked |> filter(rank == 1) |> arrange(age_group)
+top_list   <- glue_collapse(
+    glue("{top_by_age$age_group}: {tolower(top_by_age$sport_name)}"),
+    sep = "; ", last = "; and ")
+in_all <- sports_by_age |> count(sport_name) |> filter(n == 6) |> pull(sport_name)
+
+say("The bump plot reveals how sports and exercise shift across the American lifespan. Each ranking uses average minutes per person per day, counting everyone in the age group, so it reflects both how many people do an activity and how long they spend on it. The top activity in each age group is: ",
+    top_list, ".",
+    if (length(in_all) > 0) paste0(" ", glue_collapse(in_all, sep = ", ", last = " and "), " rank",
+                                   if (length(in_all) == 1) "s" else "",
+                                   " in the top six for every age group.") else "")
+
+base_rank <- sports_ranked |> filter(sport_name == "Baseball")
+seasonal_absent <- setdiff(c("Hockey", "Skiing/Skating"), unique(sports_by_age$sport_name))
+say("Because each ranking averages over every diary day of the year, seasonal sports are averaged over many off-season days, which pulls them down relative to year-round activities. ",
+    if (nrow(base_rank) == 0) {
+        "Baseball, often called America's pastime, does not appear in the data at all."
+    } else if (min(base_rank$rank) > 6) {
+        paste0("This helps explain why baseball, often called America's pastime, does not make the top six in any age group (its best rank is ", min(base_rank$rank), ")",
+               if (length(seasonal_absent) > 0) paste0(", and why ", glue_collapse(tolower(seasonal_absent), sep = ", ", last = " and "), " ",
+                                                       if (length(seasonal_absent) == 1) "does" else "do", " not appear either") else "",
+               ".")
+    } else {
+        "Baseball, often called America's pastime, does make the top six in at least one age group."
+    })
+```
 
 ---
 
@@ -823,39 +1223,63 @@ demographics of those who participate in or follow those activities most closely
 #| message: false
 #| warning: false
 
-childcare_per_child <- act_joined |>
-    filter(str_detect(tolower(task_level1), "care")) |>
+child_time <- person_hours(task_level2 %in% child_care_l2) |>
     filter(n_children >= 1) |>
-    group_by(participant_id, n_children, survey_weight) |>
-    summarize(
-        total_cc_min = sum(time_spent_min, na.rm = TRUE),
-        .groups = "drop"
-    ) |>
-    mutate(cc_per_child = total_cc_min / n_children) |>
+    mutate(hours_per_child = hours / n_children)
+
+childcare_by_family <- child_time |>
+    filter(n_children <= 6) |>
     group_by(n_children) |>
     summarize(
-        avg_hrs_per_child = weighted.mean(cc_per_child, survey_weight,
-                                          na.rm = TRUE) / 60,
+        n                 = n(),
+        total_hrs         = weighted.mean(hours, survey_weight),
+        avg_hrs_per_child = weighted.mean(hours_per_child, survey_weight),
         .groups = "drop"
-    ) |>
-    filter(n_children <= 6)
+    )
 
-ggplot(childcare_per_child, aes(x = factor(n_children), y = avg_hrs_per_child)) +
+childcare_by_family |>
+    mutate(family_label = paste0(n_children, "\n(n = ", comma(n), ")")) |>
+    select(family_label, `Total child care (hours per day)` = total_hrs,
+           `Per child (hours per day)` = avg_hrs_per_child) |>
+    pivot_longer(-family_label, names_to = "measure", values_to = "hours") |>
+    mutate(measure = factor(measure, levels = c("Total child care (hours per day)",
+                                                "Per child (hours per day)"))) |>
+    ggplot(aes(x = family_label, y = hours)) +
     geom_col(fill = "#D55E00") +
+    facet_wrap(~ measure) +
     labs(
-        title    = "Average Parental Care Time Per Child by Family Size",
-        subtitle = "Parents of larger families spend less time per child",
+        title    = "Parental Child Care Time by Family Size",
+        subtitle = "Total care time rises with family size more slowly than the number of children",
         x        = "Number of Children in Household",
-        y        = "Average Hours per Child per Day",
+        y        = "Average Hours per Day",
         caption  = "Source: ATUS 2003–2024 Public Use Microdata"
     )
 ```
 
-The data clearly supports the "middle-child syndrome" hypothesis: as family 
-size increases, the time parents can devote to each individual child drops 
-substantially. Parents with one child spend nearly twice as much time per 
-child as those with three or more, suggesting that parental attention is 
-indeed a finite resource that gets divided as families grow.
+```{r}
+#| label: task6-graph5-text
+#| echo: false
+#| results: asis
+
+pc1   <- childcare_by_family$avg_hrs_per_child[childcare_by_family$n_children == 1]
+tot1  <- childcare_by_family$total_hrs[childcare_by_family$n_children == 1]
+three_plus <- child_time |>
+    filter(n_children >= 3) |>
+    summarize(per_child = weighted.mean(hours_per_child, survey_weight),
+              total     = weighted.mean(hours, survey_weight))
+
+if (pc1 > three_plus$per_child) {
+    say("As family size increases, the time parents can devote to each individual child drops: parents with one child spend ",
+        fmt2(pc1), " hours per child per day, compared with ", fmt2(three_plus$per_child),
+        " for parents of three or more, or ", fmt1(pc1 / three_plus$per_child), " times as much. ",
+        if (three_plus$total > tot1) paste0("Total child care time rises, from ", fmt2(tot1), " to ", fmt2(three_plus$total),
+                                              " hours per day, but not in proportion to the number of children. ") else "",
+        "This is consistent with parental attention being a finite resource that gets divided as families grow, the idea behind \"middle-child syndrome\". The data cannot show whether any particular child, such as a middle child, receives less than their siblings.")
+} else {
+    say("Per-child care time does not fall as family size grows in these data: parents with one child spend ",
+        fmt2(pc1), " hours per child per day, compared with ", fmt2(three_plus$per_child), " for parents of three or more.")
+}
+```
 
 ## Final Insights and Deliverable
 
@@ -863,218 +1287,199 @@ indeed a finite resource that gets divided as families grow.
 
 <!-- Task 7: Time Use Profiles for Target Demographics -->
 
+For each target group, the table shows the weighted average and the middle half 
+of respondents (Q1 to Q3), averaged over everyone in the group, including those 
+who did none of the activity. Each target is either a minimum ("at least") or a 
+limit ("at most"), set near what peers in the group actually do. The last 
+column is the share of the group that meets it.
+
+```{r}
+#| label: profile-functions
+#| message: false
+#| warning: false
+
+# `targets` is a tibble with one row per activity: activity (an activity_label),
+# target_hrs, and direction ("at least", "at most", or "none" for no target)
+build_profile <- function(group_df, targets) {
+    activities <- targets$activity
+
+    totals <- act_joined |>
+        filter(activity_label %in% activities) |>
+        inner_join(group_df |> select(participant_id), join_by(participant_id)) |>
+        group_by(participant_id, activity_label) |>
+        summarize(hrs = sum(time_spent_min, na.rm = TRUE) / 60, .groups = "drop")
+
+    group_df |>
+        select(participant_id, survey_weight) |>
+        cross_join(targets |> rename(activity_label = activity)) |>
+        left_join(totals, join_by(participant_id, activity_label)) |>
+        mutate(
+            hrs   = replace_na(hrs, 0),
+            meets = case_when(
+                direction == "at least" ~ hrs >= target_hrs,
+                direction == "at most"  ~ hrs <= target_hrs,
+                .default = NA
+            )
+        ) |>
+        group_by(activity_label, target_hrs, direction) |>
+        summarize(
+            low         = wtd_quantile(hrs, survey_weight, 0.25),
+            avg_hrs     = weighted.mean(hrs, survey_weight),
+            high        = wtd_quantile(hrs, survey_weight, 0.75),
+            pct_meeting = weighted.mean(meets, survey_weight),
+            .groups = "drop"
+        ) |>
+        mutate(activity_label = factor(activity_label, levels = activities)) |>
+        arrange(activity_label) |>
+        mutate(
+            activity  = as.character(activity_label),
+            goal      = if_else(direction == "none", "None",
+                                paste(direction, fmt1(target_hrs))),
+            # Only a miss in the target's direction counts as a shortfall
+            shortfall = case_when(
+                direction == "at least" ~ pmax(target_hrs - avg_hrs, 0),
+                direction == "at most"  ~ pmax(avg_hrs - target_hrs, 0),
+                .default = NA_real_
+            )
+        ) |>
+        select(activity, low, avg_hrs, high, target_hrs, direction, goal,
+               pct_meeting, shortfall)
+}
+
+profile_gt <- function(tbl, title, subtitle) {
+    tbl |>
+        select(activity, low, avg_hrs, high, goal, pct_meeting) |>
+        gt() |>
+        cols_label(
+            activity    = "Activity",
+            low         = "Low (Q1 hrs)",
+            avg_hrs     = "Average (hrs/day)",
+            high        = "High (Q3 hrs)",
+            goal        = "Target (hrs/day)",
+            pct_meeting = "% Meeting Target"
+        ) |>
+        fmt_number(columns = c(low, avg_hrs, high), decimals = 1) |>
+        fmt_percent(columns = pct_meeting, decimals = 0) |>
+        sub_missing(columns = pct_meeting, missing_text = "n/a") |>
+        tab_header(title = title, subtitle = subtitle) |>
+        tab_source_note("Source: ATUS 2003–2024 Public Use Microdata") |>
+        tab_footnote(
+            footnote = "Quartiles are taken over everyone in the group, including people who did none of the activity that day, so Q3 can be 0.0 while the average is above 0 when most of the group did none.",
+            locations = cells_column_labels(columns = high)
+        ) |>
+        tab_footnote(
+            footnote = "Targets are suggested goals for the app's gamification system, based on product manager judgment. \"At least\" targets are minimums and \"at most\" targets are limits. Activities with no target show the group average only.",
+            locations = cells_column_labels(columns = goal)
+        )
+}
+
+# Plain-language summary of a profile table
+profile_text <- function(tbl, who, n) {
+    desc <- glue_collapse(
+        glue("time on {tolower(tbl$activity)} averages {fmt1(tbl$avg_hrs)} hours",
+             "{ifelse(tbl$direction == 'none', '', paste0(' (target: ', tbl$goal, ')'))}"),
+        sep = ", ", last = ", and ")
+    short <- tbl |> filter(!is.na(shortfall), shortfall > 0)
+    gap_txt <- if (nrow(short) == 0) {
+        "On average, the group already meets all of its targets."
+    } else {
+        big <- short |> slice_max(shortfall, n = 1, with_ties = FALSE)
+        paste0("The largest shortfall against a target is for ", tolower(big$activity),
+               ", where the average of ", fmt1(big$avg_hrs), " hours is ", fmt1(big$shortfall),
+               " hours ", if (big$direction == "at least") "below" else "above",
+               " the target (", big$goal, "), and ", percent(big$pct_meeting, accuracy = 1),
+               " of the group meets it.")
+    }
+    paste0("Among ", who, " (n = ", comma(n), "), ", desc, ". ", gap_txt)
+}
+```
+
 ```{r}
 #| label: task7-sahd
 #| message: false
 #| warning: false
 
-# ── Demographic 1: Stay-at-home dads ─────────────────────────────────────────
-# Definition: Male, married, not employed, at least 1 child under 18
-sahd <- atus_resp |>
-    filter(
-        sex == "M",
-        married == TRUE,
-        n_children >= 1,
-        employment_status %in% c("Not Employed - Not Looking",
-                                  "Not Employed - Looking")
-    )
+# ── Demographic 1: Stay-at-home dads (proxy) ─────────────────────────────────
+# The ATUS does not identify stay-at-home parents directly. Base proxy: married
+# men under 65 with a child under 18 who are not in the labor force. Tighter
+# proxy: also an employed spouse in the household and a youngest child under 13.
+sahd_base <- atus_resp |>
+    filter(sex == "M", married %in% TRUE, n_children >= 1,
+           employment_status == "Not in labor force",
+           age >= 18, age < 65)
 
-sahd_key <- atus_act |>
-    inner_join(atus_codes, join_by(level3_code == code_level3)) |>
-    inner_join(sahd |> select(participant_id, survey_weight),
-               join_by(participant_id)) |>
-    filter(str_detect(tolower(task_level1),
-                      "care|household|leisure")) |>
-    mutate(activity = case_when(
-        str_detect(tolower(task_level1), "care")      ~ "Child Care",
-        str_detect(tolower(task_level1), "household") ~ "Household Activities",
-        str_detect(tolower(task_level1), "leisure")   ~ "Leisure & Recreation"
-    )) |>
-    group_by(participant_id, activity, survey_weight) |>
-    summarize(total_min = sum(time_spent_min, na.rm = TRUE), .groups = "drop") |>
-    group_by(activity) |>
-    summarize(
-        low     = quantile(total_min, 0.25, na.rm = TRUE) / 60,
-        avg_hrs = weighted.mean(total_min, survey_weight, na.rm = TRUE) / 60,
-        high    = quantile(total_min, 0.75, na.rm = TRUE) / 60,
-        .groups = "drop"
-    ) |>
-    mutate(
-        target_hrs = case_when(
-            activity == "Child Care"           ~ 6.0,
-            activity == "Household Activities" ~ 3.0,
-            activity == "Leisure & Recreation" ~ 2.0
-        )
-    )
+sahd_tight <- sahd_base |>
+    filter(spouse_present %in% TRUE, spouse_employed %in% TRUE,
+           youngest_child_age < 13)
 
-# Compute % meeting target separately
-sahd_pct <- atus_act |>
-    inner_join(atus_codes, join_by(level3_code == code_level3)) |>
-    inner_join(sahd |> select(participant_id, survey_weight),
-               join_by(participant_id)) |>
-    filter(str_detect(tolower(task_level1),
-                      "care|household|leisure")) |>
-    mutate(activity = case_when(
-        str_detect(tolower(task_level1), "care")      ~ "Child Care",
-        str_detect(tolower(task_level1), "household") ~ "Household Activities",
-        str_detect(tolower(task_level1), "leisure")   ~ "Leisure & Recreation"
-    )) |>
-    group_by(participant_id, activity, survey_weight) |>
-    summarize(total_hrs = sum(time_spent_min, na.rm = TRUE) / 60,
-              .groups = "drop") |>
-    mutate(target_hrs = case_when(
-        activity == "Child Care"           ~ 6.0,
-        activity == "Household Activities" ~ 3.0,
-        activity == "Leisure & Recreation" ~ 2.0
-    )) |>
-    group_by(activity) |>
-    summarize(
-        pct_meeting_target = weighted.mean(total_hrs >= target_hrs,
-                                           survey_weight, na.rm = TRUE),
-        .groups = "drop"
-    )
+# Use the tighter definition unless it leaves too few respondents
+use_tight <- nrow(sahd_tight) >= 300
+sahd <- if (use_tight) sahd_tight else sahd_base
+sahd_definition <- if (use_tight) {
+    "married men under 65 with an employed spouse and a youngest child under 13 who are not in the labor force"
+} else {
+    "married men under 65 with a child under 18 who are not in the labor force"
+}
 
-sahd_key |>
-    left_join(sahd_pct, join_by(activity)) |>
-    gt() |>
-    cols_label(
-        activity           = "Activity",
-        low                = "Low (Q1 hrs)",
-        avg_hrs            = "Typical (hrs/day)",
-        high               = "High (Q3 hrs)",
-        target_hrs         = "Target (hrs/day)",
-        pct_meeting_target = "% Meeting Target"
-    ) |>
-    fmt_number(columns = c(low, avg_hrs, high, target_hrs), decimals = 1) |>
-    fmt_percent(columns = pct_meeting_target, decimals = 0) |>
-    tab_header(
-        title    = "Time Use Profile: Stay-at-Home Dads",
-        subtitle = "Married, unemployed men with at least one child under 18"
-    ) |>
-    tab_source_note("Source: ATUS 2003–2024 Public Use Microdata") |>
-    tab_footnote(
-        footnote = "Target levels represent suggested goals for the app's gamification system, based on product manager judgment.",
-        locations = cells_column_labels(columns = target_hrs)
-    )
+sahd_targets <- tribble(
+    ~activity,              ~target_hrs, ~direction,
+    "Child Care",           2.0,         "at least",
+    "Household Activities", 3.0,         "at least",
+    "Leisure & Recreation", 5.0,         "at most"
+)
+sahd_profile <- build_profile(sahd, sahd_targets)
+
+profile_gt(sahd_profile,
+           title    = "Time Use Profile: Stay-at-Home Dads (Proxy)",
+           subtitle = glue("{str_to_sentence(sahd_definition)} (n = {comma(nrow(sahd))})"))
 ```
 
-Stay-at-home dads represent a growing but still relatively small demographic in 
-the United States. Child care dominates their day at an average of 10 hours which 
-is well above the 6-hour target, reflecting the reality that primary caregiving is 
-an around-the-clock responsibility. Leisure and recreation follow at 5.3 hours, 
-which may seem high but likely captures passive time spent alongside children rather 
-than purely personal downtime. Household activities account for 3.7 hours on average, 
-slightly above the 3-hour target. Notably, about one in four stay-at-home dads in this 
-sample reported spending no time on leisure on their survey day, suggesting significant 
-variability in how this group structures their time.
+```{r}
+#| label: task7-sahd-text
+#| echo: false
+#| results: asis
+
+say("Stay-at-home dads represent a relatively small demographic in the United States. The ATUS does not identify them directly, so this group is approximated as ",
+    sahd_definition, "; it also includes men who are out of the labor force for other reasons, such as disability or school.",
+    if (!use_tight) " A tighter definition (an employed spouse and a youngest child under 13) left too few respondents, so the broader group is used." else if (nrow(sahd) < 500) " The sample is modest, so these numbers are indicative." else "")
+say(profile_text(sahd_profile, "this group", nrow(sahd)))
+```
 
 ---
+
 ```{r}
 #| label: task7-college
 #| message: false
 #| warning: false
 
 # ── Demographic 2: College undergraduates ────────────────────────────────────
-# Definition: Age 18-24, enrolled in college
+# Definition: Age 18-24, enrolled in college (not high school)
 college_students <- atus_resp |>
-    filter(
-        age >= 18 & age <= 24,
-        enrolled_in_college == TRUE
-    )
+    filter(age >= 18, age <= 24, enrolled_in_college)
 
-college_key <- atus_act |>
-    inner_join(atus_codes, join_by(level3_code == code_level3)) |>
-    inner_join(college_students |> select(participant_id, survey_weight),
-               join_by(participant_id)) |>
-    mutate(activity = case_when(
-        str_detect(tolower(task_level1), "education")           ~ "Education & Studying",
-        str_detect(tolower(task_level1), "personal")            ~ "Sleep & Personal Care",
-        str_detect(tolower(task_level1), "leisure")             ~ "Leisure & Socializing",
-        str_detect(tolower(task_level1), "work")                ~ "Working",
-        TRUE ~ NA_character_
-    )) |>
-    filter(!is.na(activity)) |>
-    group_by(participant_id, activity, survey_weight) |>
-    summarize(total_min = sum(time_spent_min, na.rm = TRUE), .groups = "drop") |>
-    group_by(activity) |>
-    summarize(
-        low     = quantile(total_min, 0.25, na.rm = TRUE) / 60,
-        avg_hrs = weighted.mean(total_min, survey_weight, na.rm = TRUE) / 60,
-        high    = quantile(total_min, 0.75, na.rm = TRUE) / 60,
-        .groups = "drop"
-    ) |>
-    mutate(
-        target_hrs = case_when(
-            activity == "Education & Studying"  ~ 6.0,
-            activity == "Sleep & Personal Care" ~ 8.0,
-            activity == "Leisure & Socializing" ~ 3.0,
-            activity == "Working"               ~ 2.0
-        )
-    )
+# Working is not treated as a problem to fix, so it has no target
+college_targets <- tribble(
+    ~activity,               ~target_hrs, ~direction,
+    "Education & Studying",  5.0,         "at least",
+    "Leisure & Recreation",  3.0,         "at most",
+    "Sleep & Personal Care", 8.0,         "at least",
+    "Working",               NA_real_,    "none"
+)
+college_profile <- build_profile(college_students, college_targets)
 
-# Compute % meeting target
-college_pct <- atus_act |>
-    inner_join(atus_codes, join_by(level3_code == code_level3)) |>
-    inner_join(college_students |> select(participant_id, survey_weight),
-               join_by(participant_id)) |>
-    mutate(activity = case_when(
-        str_detect(tolower(task_level1), "education")           ~ "Education & Studying",
-        str_detect(tolower(task_level1), "personal")            ~ "Sleep & Personal Care",
-        str_detect(tolower(task_level1), "leisure")             ~ "Leisure & Socializing",
-        str_detect(tolower(task_level1), "work")                ~ "Working",
-        TRUE ~ NA_character_
-    )) |>
-    filter(!is.na(activity)) |>
-    group_by(participant_id, activity, survey_weight) |>
-    summarize(total_hrs = sum(time_spent_min, na.rm = TRUE) / 60,
-              .groups = "drop") |>
-    mutate(target_hrs = case_when(
-        activity == "Education & Studying"  ~ 6.0,
-        activity == "Sleep & Personal Care" ~ 8.0,
-        activity == "Leisure & Socializing" ~ 3.0,
-        activity == "Working"               ~ 2.0
-    )) |>
-    group_by(activity) |>
-    summarize(
-        pct_meeting_target = weighted.mean(total_hrs >= target_hrs,
-                                           survey_weight, na.rm = TRUE),
-        .groups = "drop"
-    )
-
-college_key |>
-    left_join(college_pct, join_by(activity)) |>
-    gt() |>
-    cols_label(
-        activity           = "Activity",
-        low                = "Low (Q1 hrs)",
-        avg_hrs            = "Typical (hrs/day)",
-        high               = "High (Q3 hrs)",
-        target_hrs         = "Target (hrs/day)",
-        pct_meeting_target = "% Meeting Target"
-    ) |>
-    fmt_number(columns = c(low, avg_hrs, high, target_hrs), decimals = 1) |>
-    fmt_percent(columns = pct_meeting_target, decimals = 0) |>
-    tab_header(
-        title    = "Time Use Profile: College Undergraduates",
-        subtitle = "Enrolled students ages 18–24"
-    ) |>
-    tab_source_note("Source: ATUS 2003–2024 Public Use Microdata") |>
-    tab_footnote(
-        footnote = "Target levels represent suggested goals for the app's gamification system, based on product manager judgment.",
-        locations = cells_column_labels(columns = target_hrs)
-    )
+profile_gt(college_profile,
+           title    = "Time Use Profile: College Undergraduates",
+           subtitle = glue("Enrolled students ages 18–24 (n = {comma(nrow(college_students))})"))
 ```
 
-College undergraduates face a unique time allocation challenge: balancing academic 
-demands with social life, work, and adequate rest. At 5.5 hours of education per day
-on average, students come close to but fall short of the 6-hour study target and only 
-a fraction consistently hit that mark. The shortage in study time may be split among 
-those students that prioritize social endeavors and those that need to work to support 
-their tuition and living costs. In fact, working emerges as a surprising time commitment
-at 6.2 hours typical, far exceeding the 2-hour target and suggesting many students are 
-balancing near-full-time work alongside their studies. Sleep and personal care average 
-9.8 hours, comfortably above the 8-hour target, while leisure at 4.1 hours exceeds the 
-3-hour target as well. The picture that emerges is of a demographic that is time-stretched in multiple directions, working more than is ideal for academic success while still finding time for social connection.
+```{r}
+#| label: task7-college-text
+#| echo: false
+#| results: asis
+
+say("College undergraduates face a unique time allocation challenge: balancing academic demands with social life, work, and adequate rest.")
+say(profile_text(college_profile, "enrolled college students ages 18 to 24", nrow(college_students)))
+```
 
 ---
 
@@ -1086,112 +1491,52 @@ balancing near-full-time work alongside their studies. Sleep and personal care a
 #| warning: false
 
 # ── Demographic 3: Career-Changing Graduate Students ─────────────────────────
+# Married adults 30-40, enrolled in college, no children at home, working
+# part-time or not working (unemployed or out of the labor force)
 career_changers <- atus_resp |>
-    filter(
-        age >= 30 & age <= 40,
-        enrolled_in_college == TRUE,
-        married == TRUE,
-        n_children == 0,
-        employment_status %in% c("Employed - Part Time",
-                                  "Not Employed - Not Looking",
-                                  "Not Employed - Looking")
-    )
+    filter(age >= 30, age <= 40, enrolled_in_college, married %in% TRUE,
+           n_children == 0,
+           (employment_status %in% c("Employed - at work", "Employed - absent") &
+                work_time == "Part time") |
+               employment_status %in% c("Unemployed - on layoff",
+                                        "Unemployed - looking",
+                                        "Not in labor force"))
 
-career_changer_key <- atus_act |>
-    inner_join(atus_codes, join_by(level3_code == code_level3)) |>
-    inner_join(career_changers |> select(participant_id, survey_weight),
-               join_by(participant_id)) |>
-    mutate(activity = case_when(
-        str_detect(tolower(task_level1), "education")  ~ "Education & Studying",
-        str_detect(tolower(task_level1), "work")       ~ "Working & Work-Related",
-        str_detect(tolower(task_level1), "leisure")    ~ "Leisure & Recreation",
-        str_detect(tolower(task_level1), "personal")   ~ "Sleep & Personal Care",
-        str_detect(tolower(task_level1), "household")  ~ "Household Activities",
-        TRUE ~ NA_character_
-    )) |>
-    filter(!is.na(activity)) |>
-    group_by(participant_id, activity, survey_weight) |>
-    summarize(total_min = sum(time_spent_min, na.rm = TRUE), .groups = "drop") |>
-    group_by(activity) |>
-    summarize(
-        low     = quantile(total_min, 0.25, na.rm = TRUE) / 60,
-        avg_hrs = weighted.mean(total_min, survey_weight, na.rm = TRUE) / 60,
-        high    = quantile(total_min, 0.75, na.rm = TRUE) / 60,
-        .groups = "drop"
-    ) |>
-    mutate(
-        target_hrs = case_when(
-            activity == "Education & Studying"   ~ 6.0,
-            activity == "Working & Work-Related" ~ 2.0,
-            activity == "Leisure & Recreation"   ~ 2.5,
-            activity == "Sleep & Personal Care"  ~ 8.0,
-            activity == "Household Activities"   ~ 1.5
-        )
-    )
+career_targets <- tribble(
+    ~activity,               ~target_hrs, ~direction,
+    "Education & Studying",  5.0,         "at least",
+    "Working",               2.0,         "at most",
+    "Leisure & Recreation",  3.0,         "at most",
+    "Sleep & Personal Care", 8.0,         "at least",
+    "Household Activities",  1.5,         "at most"
+)
+career_profile <- build_profile(career_changers, career_targets)
 
-# Compute % meeting target
-career_pct <- atus_act |>
-    inner_join(atus_codes, join_by(level3_code == code_level3)) |>
-    inner_join(career_changers |> select(participant_id, survey_weight),
-               join_by(participant_id)) |>
-    mutate(activity = case_when(
-        str_detect(tolower(task_level1), "education")  ~ "Education & Studying",
-        str_detect(tolower(task_level1), "work")       ~ "Working & Work-Related",
-        str_detect(tolower(task_level1), "leisure")    ~ "Leisure & Recreation",
-        str_detect(tolower(task_level1), "personal")   ~ "Sleep & Personal Care",
-        str_detect(tolower(task_level1), "household")  ~ "Household Activities",
-        TRUE ~ NA_character_
-    )) |>
-    filter(!is.na(activity)) |>
-    group_by(participant_id, activity, survey_weight) |>
-    summarize(total_hrs = sum(time_spent_min, na.rm = TRUE) / 60,
-              .groups = "drop") |>
-    mutate(target_hrs = case_when(
-        activity == "Education & Studying"   ~ 6.0,
-        activity == "Working & Work-Related" ~ 2.0,
-        activity == "Leisure & Recreation"   ~ 2.5,
-        activity == "Sleep & Personal Care"  ~ 8.0,
-        activity == "Household Activities"   ~ 1.5
-    )) |>
-    group_by(activity) |>
-    summarize(
-        pct_meeting_target = weighted.mean(total_hrs >= target_hrs,
-                                           survey_weight, na.rm = TRUE),
-        .groups = "drop"
-    )
-
-career_changer_key |>
-    left_join(career_pct, join_by(activity)) |>
-    gt() |>
-    cols_label(
-        activity           = "Activity",
-        low                = "Low (Q1 hrs)",
-        avg_hrs            = "Typical (hrs/day)",
-        high               = "High (Q3 hrs)",
-        target_hrs         = "Target (hrs/day)",
-        pct_meeting_target = "% Meeting Target"
-    ) |>
-    fmt_number(columns = c(low, avg_hrs, high, target_hrs), decimals = 1) |>
-    fmt_percent(columns = pct_meeting_target, decimals = 0) |>
-    tab_header(
-        title    = "Time Use Profile: Career-Changing Graduate Students",
-        subtitle = "Married adults ages 30–40, enrolled in college, no children, working part-time or not at all"
-    ) |>
-    tab_source_note("Source: ATUS 2003–2024 Public Use Microdata") |>
-    tab_footnote(
-        footnote = "Target levels represent suggested goals for the app's gamification system, based on product manager judgment.",
-        locations = cells_column_labels(columns = target_hrs)
-    )
+profile_gt(career_profile,
+           title    = "Time Use Profile: Career-Changing Graduate Students",
+           subtitle = glue("Married adults ages 30–40, enrolled in college, no children, working part-time or not at all (n = {comma(nrow(career_changers))})"))
 ```
 
-Career-changing graduate students occupy a uniquely demanding position: unlike 
-traditional students, they bring years of professional experience into the classroom 
-while simultaneously managing the responsibilities of adult life. At 3.8 hours of 
-education per day on average, this group studies significantly less than traditional 
-undergraduates at 5.5 hours. This gap likely reflects the competing demands of part-time 
-work, household responsibilities, and the general pace of adult life. Leisure at 4.1 hours 
-exceeds the 2.5-hour target, suggesting that while career changers are stretched, they are 
-not sacrificing personal time entirely. Sleep and personal care at 10 hours is above the 8-hour target, which is a positive sign for well-being. The most actionable insight for the app is the study time gap. Nudging this demographic toward the 6-hour target represents the clearest opportunity for "gamification" to make a meaningful difference in academic outcomes.
+```{r}
+#| label: task7-custom-text
+#| echo: false
+#| results: asis
+
+study_career  <- career_profile$avg_hrs[career_profile$activity == "Education & Studying"]
+study_college <- college_profile$avg_hrs[college_profile$activity == "Education & Studying"]
+career_short  <- career_profile |>
+    filter(!is.na(shortfall), shortfall > 0) |>
+    slice_max(shortfall, n = 1, with_ties = FALSE)
+
+say("Career-changing graduate students occupy a uniquely demanding position: unlike traditional students, they bring years of professional experience into the classroom while simultaneously managing the responsibilities of adult life. This group is small in the ATUS (n = ",
+    comma(nrow(career_changers)), "), so these numbers are indicative rather than precise.")
+say(profile_text(career_profile, "career-changing graduate students", nrow(career_changers)))
+say("Their average of ", fmt1(study_career), " hours per day on education is ",
+    if (study_career < study_college - 0.1) "less than" else if (study_career > study_college + 0.1) "more than" else "about the same as",
+    " the ", fmt1(study_college), " hours of traditional undergraduates. ",
+    if (nrow(career_short) > 0) paste0("The largest shortfall, for ", tolower(career_short$activity),
+        ", is the clearest opportunity for \"gamification\" to make a meaningful difference.") else "")
+```
 
 ---
 
@@ -1205,12 +1550,16 @@ not sacrificing personal time entirely. Sleep and personal care at 10 hours is a
 #| fig-height: 7
 
 # ── Data setup ────────────────────────────────────────────────────────────────
-activities <- c("Education &\nStudying", "Working &\nWork-Related", 
-                "Leisure &\nRecreation", "Sleep &\nPersonal Care", 
-                "Household\nActivities")
+# "Peer Average" comes from the career-changer profile computed above;
+# "My Week" is my own estimated week.
+ring_order  <- c("Education & Studying", "Working", "Leisure & Recreation",
+                 "Sleep & Personal Care", "Household Activities")
+activities  <- c("Education &\nStudying", "Working &\nWork-Related", 
+                 "Leisure &\nRecreation", "Sleep &\nPersonal Care", 
+                 "Household\nActivities")
 
-target_hrs  <- c(6.0, 2.0, 2.5, 8.0, 1.5)
-typical_hrs <- c(3.8, 3.3, 4.1, 10.0, 2.1)
+target_hrs  <- career_profile$target_hrs[match(ring_order, career_profile$activity)]
+typical_hrs <- career_profile$avg_hrs[match(ring_order, career_profile$activity)]
 my_hrs      <- c(8.0, 1.0, 2.0, 8.0, 3.0)
 
 target_pct_typical <- pmin(typical_hrs / target_hrs, 1)
@@ -1220,9 +1569,10 @@ n <- length(activities)
 
 rings_data <- data.frame(
     activity   = rep(factor(activities, levels = rev(activities)), 2),
-    group      = rep(c("Peer Average", "My Week"), each = n),
+    group      = factor(rep(c("Peer Average", "My Week"), each = n),
+                        levels = c("Peer Average", "My Week")),
     pct        = c(target_pct_typical, target_pct_mine),
-    actual_hrs = c(typical_hrs, my_hrs),
+    actual_hrs = round(c(typical_hrs, my_hrs), 1),
     target_hrs = rep(target_hrs, 2),
     ring       = rep(seq(n, 1), 2)
 )
@@ -1233,31 +1583,6 @@ ring_colors <- c(
     "Leisure &\nRecreation"   = "#009E73",
     "Sleep &\nPersonal Care"  = "#956C3B",
     "Household\nActivities"   = "#CC79A7"
-)
-
-# Label data — place at end of each arc
-label_data <- rings_data |>
-    mutate(
-        angle     = 2 * pi * pct - pi/2,
-        label_x   = (ring - 0.2) * cos(angle),
-        label_y   = (ring - 0.2) * sin(angle),
-        short_label = case_when(
-            grepl("Education", activity)  ~ "📚",
-            grepl("Working",   activity)  ~ "💼",
-            grepl("Leisure",   activity)  ~ "🎯",
-            grepl("Sleep",     activity)  ~ "😴",
-            grepl("Household", activity)  ~ "🏠"
-        ),
-        hours_label = paste0(actual_hrs, "h")
-    )
-
-# Legend data
-legend_data <- data.frame(
-    activity  = factor(activities, levels = rev(activities)),
-    color     = unname(ring_colors[activities]),
-    emoji     = c("📚", "💼", "🎯", "😴", "🏠"),
-    target    = target_hrs,
-    ring      = seq(n, 1)
 )
 
 ggplot(rings_data) +
@@ -1274,7 +1599,7 @@ ggplot(rings_data) +
             fill = activity),
         color = NA
     ) +
-    # Hours label at center-right of each ring
+    # Hours label at the bottom of each ring
     geom_text(
         data = rings_data |> filter(group == "My Week"),
         aes(x = 0, y = -ring + 0.2, 
@@ -1315,32 +1640,33 @@ ggplot(rings_data) +
     guides(fill = guide_legend(nrow = 1)) +
     labs(
         title    = "Activity Rings: Career-Changing Graduate Student",
-        subtitle = "Each ring shows hours spent as a % of daily target | Fully filled = target met",
-        caption  = "Source: ATUS 2003–2024 | Personal time estimates for 'My Week'"
+        subtitle = "Each ring shows hours spent as a % of the target value (capped at 100%)",
+        caption  = "Source: ATUS 2003–2024 | Peer Average = career-changer group average; My Week = personal time estimates\nFor \"at most\" targets (working, leisure, household), a full ring means the limit was reached."
     )
 ```
 
 ## Conclusion
 
-This analysis, of over two decades of ATUS microdata, reveals several 
-interesting patterns in how Americans allocate their time. Older Americans 
-spend significantly more hours doing household tasks, while younger Americans,
-particularly college students, spend surprisingly, or maybe not, little time on 
-academic pursuits relative to the recommended benchmarks. The results also highlight
-that parental attention is clearly a finite resource, with time per child declining 
-sharply as family size grows, lending empirical support to the concept of "middle-child syndrome."
+```{r}
+#| label: conclusion-text
+#| echo: false
+#| results: asis
 
-For the time-tracking app, our three target demographics: stay-at-home 
-dads, college undergraduates, and career-changing graduate students, 
-each present distinct time-use patterns and distinct gaps between typical 
-and target behavior. These gaps represent the core opportunity for 
-"gamification": nudging users toward healthier time allocation by showing 
-them how they compare to peers and to evidence-based targets.
+college_study_target <- college_targets$target_hrs[college_targets$activity == "Education & Studying"]
+study_gap_dir <- if (study_college < college_study_target) "below" else "at or above"
 
-Future analyses could incorporate longitudinal tracking to understand how 
-individual time-use evolves over life stages, or integrate well-being 
-survey data to identify which time allocations are most strongly associated 
-with reported happiness and life satisfaction.
+say("This analysis, of over two decades of ATUS microdata, reveals several interesting patterns in how Americans allocate their time. Household activity time is highest among Americans aged ",
+    hh_peak, " (", fmt1(hh_peak_hrs), " hours per day). College undergraduates average ",
+    fmt1(study_college), " hours per day on educational activities, ", study_gap_dir,
+    " the ", fmt1(college_study_target), "-hour study target we set for the app.",
+    if (pc1 > three_plus$per_child) paste0(" Parental attention per child falls from ", fmt1(pc1),
+        " hours per day in one-child households to ", fmt1(three_plus$per_child),
+        " in households with three or more, consistent with attention being a finite resource that is divided as families grow.") else "")
+
+say("For the time-tracking app, our three target demographics: stay-at-home dads, college undergraduates, and career-changing graduate students, each present distinct time-use patterns and distinct gaps between average and target behavior. These gaps represent the core opportunity for \"gamification\": nudging users toward healthier time allocation by showing them how they compare to peers and to evidence-based targets.")
+
+say("Future analyses could incorporate longitudinal tracking to understand how individual time-use evolves over life stages, or integrate well-being survey data to identify which time allocations are most strongly associated with reported happiness and life satisfaction.")
+```
 
 ::: {.callout-note title="AI Usage Statement" collapse="true"}
 
@@ -1348,10 +1674,13 @@ Claude (Anthropic) was used in this mini-project to assist with R code
 generation, debugging, and structuring the analytical pipeline. Specifically, 
 AI assistance was used to help write and troubleshoot the data loading 
 functions, join logic between ATUS files, and ggplot2 visualization code. 
-All written narrative text, including the introduction, interpretive 
+The original written narrative, including the introduction, interpretive 
 paragraphs, and conclusion, was written by the student without AI 
-assistance, in accordance with course policy. AI was not used to write 
-or edit any non-code text in this report.
+assistance, in accordance with course policy.
+
+For the October 2026 republication, Claude was also used to audit the code, 
+to implement the corrections described in the republication note, and to revise 
+the narrative sentences affected by the corrected results.
 
 :::
 
