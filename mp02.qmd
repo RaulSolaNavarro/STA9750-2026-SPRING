@@ -1360,7 +1360,7 @@ profile_gt <- function(tbl, title, subtitle) {
         ) |>
         fmt_number(columns = c(low, avg_hrs, high), decimals = 1) |>
         fmt_percent(columns = pct_meeting, decimals = 0) |>
-        sub_missing(columns = pct_meeting, missing_text = "n/a") |>
+        # sub_missing(columns = pct_meeting, missing_text = "n/a") |>
         tab_header(title = title, subtitle = subtitle) |>
         tab_source_note("Source: ATUS 2003–2024 Public Use Microdata") |>
         tab_footnote(
