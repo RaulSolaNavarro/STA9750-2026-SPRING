@@ -6,14 +6,6 @@ date-modified: "2026-10-09"
 language:
   title-block-published: "Originally Published"
   title-block-modified: "Republished"
-open-graph:
-  title: "Home Field Advantage: Forecasting Team USA's Gold Medals at LA 2028"
-  description: "A Monte Carlo model of Team USA's 2028 gold medal count. It combines the US baseline, home advantage, new sports and GDP per capita into a forecast with a range."
-  image: https://raulsolanavarro.github.io/STA9750-2026-SPRING/mp04-preview.png
-twitter-card:
-  title: "Home Field Advantage: Forecasting Team USA's Gold Medals at LA 2028"
-  description: "A Monte Carlo model of Team USA's 2028 gold medal count. It combines the US baseline, home advantage, new sports and GDP per capita into a forecast with a range."
-  image: https://raulsolanavarro.github.io/STA9750-2026-SPRING/mp04-preview.png
 format:
   html:
     toc: true
@@ -24,6 +16,7 @@ format:
     embed-resources: false
     self-contained: false
     css: mp04-styles.css
+    include-in-header: og-mp04.html
 execute:
   warning: false
   message: false
